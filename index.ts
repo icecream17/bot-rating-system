@@ -47,12 +47,15 @@ class Game {
    result: Result | null
 
    constructor (players: gameParticipants, id?: ID) {
-      this.id = id ?? Game.totalGames++
+      this.id = id ?? Game.totalGames
 
       this.players = players
       this.startTime = null
       this.finishTime = null
       this.result = null
+
+      Game.totalGames++
+
       for (const player of players) {
          if (!player.games.includes(this)) {
             player.games.push(this)
