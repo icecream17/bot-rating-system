@@ -21,7 +21,8 @@
 const Defaults = {
    ratingInterval: 400,
    ratingValue: 1500,
-   ratingK: 500
+   ratingK: 500,
+   ratingCertaintyCoefficient: 7 / 8
 };
 
 class Game {
@@ -33,6 +34,7 @@ class Game {
       this.startTime = null;
       this.finishTime = null;
       this.result = null;
+
       Game.totalGames++;
 
       for (const player of players) {
@@ -60,13 +62,13 @@ class Player {
       this.id = id ?? Player.totalPlayers;
       this.games = [];
       this.rating = new Rating(this);
-      this.playedAgainst = {};
+      this.gamesAgainst = {};
       Player.totalPlayers++;
    }
 }
 
 class Bot extends Player {
-   constructor(id, version) {
+   constructor (id, version) {
       super(id);
       this.version = version;
    }
@@ -75,19 +77,26 @@ class Bot extends Player {
 class Rating {
    constructor (player) {
       this.value = Defaults.ratingValue;
-      this.lastCertainty = 0;
       this.player = player;
    }
 
-   /**
-    * Returns 1 - (1 / n)
-    * where n = 1 + Σ(log_totalPlayers(player total games))
-    */
-   get certainty () {
-      const totalGames = Object.values(this.player.playedAgainst)
-                               .reduce((accum, curr) => accum + curr, 0)
-      const n = 1 + (Math.log(Player.totalPlayers) / Math.log(totalGames))
-      return 1 - (1 / n);
+   certaintyAgainstPlayers (players) {
+      let totalCertainty = 0;
+      for (const player of players) {
+         if (player === this.player) {
+            continue;
+         }
+         totalCertainty += this.certaintyAgainstPlayer(player);
+      }
+      return totalCertainty / players.length;
+   }
+
+   certaintyAgainstPlayer (player) {
+      // @ts-expect-error Sigh
+      const gamesAgainstPlayer = this.player.gamesAgainst[player.id];
+      const lastCertaintyAgainstPlayer = 1 - (Defaults.ratingCertaintyCoefficient ** (gamesAgainstPlayer - 1));
+      const currentCertaintyAgainstPlayer = 1 - (Defaults.ratingCertaintyCoefficient ** (gamesAgainstPlayer));
+      return (lastCertaintyAgainstPlayer + currentCertaintyAgainstPlayer) / 2;
    }
 
    /** Gets the expected outcome when playing against some other rating */
@@ -95,7 +104,6 @@ class Rating {
       return 1 / (1 + (10 ** ((rating.value - this.value) / Defaults.ratingInterval)));
    }
 
-   /** */
    static expectedOutcome (a, b) {
       if (a instanceof Rating && b instanceof Rating) {
          return a.expectedOutcome(b)
@@ -127,7 +135,6 @@ class Version {
    }
 }
 
-/** This doesn't do what you think it does. Just use Game#finish() instead */
 function updatePlayers (players, result) {
    for (const playerA of players) {
       for (const playerB of players) {
@@ -135,20 +142,20 @@ function updatePlayers (players, result) {
             continue;
          }
 
-         if (!(playerB.id in playerA.playedAgainst)) {
+         if (!(playerB.id in playerA.gamesAgainst)) {
             // @ts-expect-error
-            playerA.playedAgainst[playerB.id] = 1;
+            playerA.gamesAgainst[playerB.id] = 1;
          } else {
             // @ts-expect-error
-            playerA.playedAgainst[playerB.id]++;
+            playerA.gamesAgainst[playerB.id]++;
          }
 
-         if (!(playerA.id in playerB.playedAgainst)) {
+         if (!(playerA.id in playerB.gamesAgainst)) {
             // @ts-expect-error
-            playerB.playedAgainst[playerA.id] = 1;
+            playerB.gamesAgainst[playerA.id] = 1;
          } else {
             // @ts-expect-error
-            playerB.playedAgainst[playerA.id]++;
+            playerB.gamesAgainst[playerA.id]++;
          }
       }
    }
@@ -161,19 +168,15 @@ function updatePlayers (players, result) {
          }
          totalExpected += player.rating.expectedOutcome(player2.rating);
       }
-      // Thanks internet
-      return (totalExpected / (
-         Player.totalPlayers * (Player.totalPlayers - 1) / 2)
-      );
+      // From (insecure link) http://sradack.blogspot.com/2008/06/elo-rating-system-multiple-players.html
+      // Thanks to https://gamedev.stackexchange.com/questions/55441/player-ranking-using-elo-with-more-than-two-players
+      return (totalExpected / (Player.totalPlayers * (Player.totalPlayers - 1) / 2));
    });
 
-   const lastCertainty = players.map(player => player.rating.lastCertainty);
-   const certainty = players.map(player => player.rating.certainty);
+   const certainty = players.map(player => player.rating.certaintyAgainstPlayers(players));
 
    for (let i = 0; i < players.length; i++) {
-      const halfWayCertainty = (lastCertainty[i] + certainty[i]) / 2
-      players[i].rating.value += Defaults.ratingK * (result[i] - expected[i]) * (1 - halfWayCertainty);
-      players[i].rating.lastCertainty = certainty[i];
+      players[i].rating.value += Defaults.ratingK * (result[i] - expected[i]) * (1 - certainty[i]);
    }
 
    console.assert(
