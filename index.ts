@@ -25,7 +25,8 @@ function Workaround () {
    return {
       ratingInterval: 400, // If PlayerA.rating.value === 400 + PlayerB.rating.value, 10x something
       ratingValue: 1500,
-      ratingK: 500
+      ratingK: 500,
+      ratingCertaintyCoefficient: 7 / 8
    }
 }
 
@@ -76,7 +77,7 @@ class Player {
    id: ID
    games: Game[]
    rating: Rating
-   playedAgainst: {
+   gamesAgainst: {
       // @ts-expect-error
       [key: ID]: number
    }
@@ -85,7 +86,7 @@ class Player {
       this.id = id ?? Player.totalPlayers++
       this.games = []
       this.rating = new Rating(this)
-      this.playedAgainst = {}
+      this.gamesAgainst = {}
       Player.totalPlayers++
    }
 }
@@ -100,32 +101,32 @@ class Bot extends Player {
 
 class Rating {
    value: number
-   lastCertainty: number
    player: Player
 
    constructor (player: Player) {
       this.value = Defaults.ratingValue
-      this.lastCertainty = 0
       this.player = player
    }
 
-   /**
-    * Returns 1 - (1 / n)
-    * where n = 1 + Σ(log_totalPlayers(total games))
-    */
-   get certainty (): number {
-      return 1 - (
-         1 / (
-            1 + (
-               Math.log(Player.totalPlayers) /
-               Math.log(
-                  Object.values(this.player.playedAgainst).reduce(
-                     (accum, curr) => accum as number + (curr as number), 0
-                  ) as number
-               )
-            )
-         )
-      )
+   certaintyAgainstPlayers (players: gameParticipants) {
+      let totalCertainty = 0
+      for (const player of players) {
+         if (player === this.player) {
+            players.splice(players.indexOf(player), 1) // Delete player to correct players.length
+            continue
+         }
+         totalCertainty += this.certaintyAgainstPlayer(player)
+      }
+
+      return totalCertainty / players.length
+   }
+
+   certaintyAgainstPlayer (player: Player) {
+      // @ts-expect-error Sigh
+      const gamesAgainstPlayer = (this.player.gamesAgainst[player.id] as number)
+      const lastCertaintyAgainstPlayer =  1 - (Defaults.ratingCertaintyCoefficient ** (gamesAgainstPlayer - 1))
+      const currentCertaintyAgainstPlayer =  1 - (Defaults.ratingCertaintyCoefficient ** (gamesAgainstPlayer))
+      return (lastCertaintyAgainstPlayer + currentCertaintyAgainstPlayer) / 2
    }
 
    /** Gets the expected outcome when playing against some other rating */
@@ -173,19 +174,19 @@ function updatePlayers (players: gameParticipants, result: Result) {
          if (playerA === playerB) {
             continue;
          }
-         if (!(playerB.id in playerA.playedAgainst)) {
+         if (!(playerB.id in playerA.gamesAgainst)) {
             // @ts-expect-error
-            playerA.playedAgainst[playerB.id] = 1
+            playerA.gamesAgainst[playerB.id] = 1
          } else {
             // @ts-expect-error
-            playerA.playedAgainst[playerB.id]++
+            playerA.gamesAgainst[playerB.id]++
          }
-         if (!(playerA.id in playerB.playedAgainst)) {
+         if (!(playerA.id in playerB.gamesAgainst)) {
             // @ts-expect-error
-            playerB.playedAgainst[playerA.id] = 1
+            playerB.gamesAgainst[playerA.id] = 1
          } else {
             // @ts-expect-error
-            playerB.playedAgainst[playerA.id]++
+            playerB.gamesAgainst[playerA.id]++
          }
       }
    }
@@ -207,12 +208,10 @@ function updatePlayers (players: gameParticipants, result: Result) {
       )
    })
 
-   const lastCertainty = players.map(player => player.rating.lastCertainty)
-   const certainty = players.map(player => player.rating.certainty)
+   const certainty = players.map(player => player.rating.certaintyAgainstPlayers(players))
 
    for (let i = 0; i < players.length; i++) {
-      players[i].rating.value += Defaults.ratingK * (result[i] - expected[i]) * (1 - ((lastCertainty[i] + certainty[i]) / 2))
-      players[i].rating.lastCertainty = certainty[i]
+      players[i].rating.value += Defaults.ratingK * (result[i] - expected[i]) * (1 - certainty[i])
    }
 
    console.assert(
