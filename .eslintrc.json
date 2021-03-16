@@ -1,0 +1,56 @@
+{
+   "extends": [
+      "standard-with-typescript",
+      "plugin:jest/recommended",
+      "plugin:jest/style"
+   ],
+   "env": {
+      "browser": true,
+      "es2021": true,
+      "node": true,
+      "jest": true,
+      "jest/globals": true
+   },
+   "ignorePatterns": [
+      "*.config.js"
+   ],
+   "parser": "@typescript-eslint/parser",
+   "parserOptions": {
+      "ecmaVersion": 12,
+      "project": "./tsconfig.json",
+      "sourceType": "module"
+   },
+   "plugins": [
+      "jest",
+      "@typescript-eslint"
+   ],
+   "root": true,
+   "rules": {
+      "jest/no-disabled-tests": "error",
+      "jest/no-focused-tests": "error",
+      "jest/no-identical-title": "error",
+      "jest/prefer-to-have-length": "error",
+      "jest/valid-expect": "error",
+
+      "indent": "off",
+      "@typescript-eslint/indent": [
+         "error",
+         3
+      ],
+      "@typescript-eslint/restrict-template-expressions": [
+         "error",
+         {
+            "allowNumber": true,
+            "allowBoolean": true,
+            "allowAny": true,
+            "allowNullish": true
+         }
+      ],
+
+      "comma-dangle": [
+         "error",
+         "only-multiline"
+      ],
+      "object-property-newline": "off"
+   }
+}

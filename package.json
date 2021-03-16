@@ -1,0 +1,47 @@
+{
+   "name": "bot-rating-system",
+   "version": "0.2.0",
+   "description": "A rating system that assumes players don't change",
+   "main": "index.ts",
+   "scripts": {
+      "build": "npm install --include=dev",
+      "test": "npm run test-functionality && npm run test-syntax",
+      "test-functionality": "npx jest",
+      "test-syntax": "npm run test-html-syntax && npm run test-ts-syntax && npm run test-js-syntax",
+      "test-html-syntax": "npx html-validator-cli --file=page.html --verbose",
+      "test-ts-syntax": "npx eslint index.ts index.test.ts && node success.js",
+      "test-js-syntax": "npx eslint success.js && node success.js",
+      "upload-coverage": "npx jest --ci --coverage && npx codecov"
+   },
+   "keywords": [
+      "rating system"
+   ],
+   "repository": {
+      "type": "git",
+      "url": "git+https://github.com/icecream17/bot-rating-system.git"
+   },
+   "author": "icecream17",
+   "license": "GPL-3.0-or-later",
+   "bugs": {
+      "url": "https://github.com/icecream17/bot-rating-system/issues"
+   },
+   "homepage": "https://github.com/icecream17/bot-rating-system#readme",
+   "devDependencies": {
+      "@types/jest": "^26.0.20",
+      "@typescript-eslint/eslint-plugin": "^4.18.0",
+      "chalk": "^4.1.0",
+      "codecov": "^3.8.1",
+      "eslint": "^7.22.0",
+      "eslint-config-standard-with-typescript": "^20.0.0",
+      "eslint-plugin-import": "^2.22.1",
+      "eslint-plugin-node": "^11.1.0",
+      "eslint-plugin-promise": "^4.3.1",
+      "html-validator-cli": "^7.0.1",
+      "jest": "^26.6.3",
+      "ts-jest": "^26.5.3",
+      "typescript": "^4.2.3"
+   },
+   "dependencies": {
+      "eslint-plugin-jest": "^24.3.1"
+   }
+}
