@@ -22,28 +22,31 @@ export const Defaults = {
    ratingInterval: 400, // If PlayerA.rating.value === 400 + PlayerB.rating.value, 10x something
    ratingValue: 1500,
    ratingK: 500,
-   ratingCertaintyCoefficient: 7 / 8
+   ratingCertaintyCoefficient: 0.001 ** 0.001
 } as const
 
 // Array whose indexes correspond to a game's player array.
-export type Result = number[]
-export type ID = number | string | symbol
-export type gameParticipants = [Player, Player, ...Player[]]
+export type Result = Readonly<[number, number, ...number[]]>
+export type ID = Readonly<number | string 
+   // ALSO:  | symbol
+   // But typescript is bad
+>
+export type gameParticipants = Readonly<[Player, Player, ...Player[]]>
 
 export class Game {
    static totalGames = 0
 
-   id: ID | null
-   players: gameParticipants
+   readonly id: ID
+   readonly players: gameParticipants
    startTime: number | null
    finishTime: number | null
    result: Result | null
 
-   constructor (players: gameParticipants, id?: ID) {
+   constructor (players: gameParticipants, id?: ID | null, startImmediately: boolean = false) {
       this.id = id ?? Game.totalGames
 
       this.players = players
-      this.startTime = null
+      this.startTime = startImmediately ? Date.now() : null
       this.finishTime = null
       this.result = null
 
@@ -57,10 +60,18 @@ export class Game {
    }
 
    start (): number {
+      if (this.startTime !== null) {
+         throw ReferenceError('Game already started')
+      }
+
       return (this.startTime = Date.now()) // intentional return-assign
    }
 
    finish (result: Result): number {
+      if (this.finishTime !== null) {
+         throw ReferenceError('Game already finished')
+      }
+
       this.result = result
       updatePlayerStats(this.players, result)
       return (this.finishTime = Date.now()) // intentional return assign
@@ -78,7 +89,7 @@ export class Player {
       [key: ID]: number
    }
 
-   constructor (id?: ID) {
+   constructor (id?: ID | null) {
       this.id = id ?? Player.totalPlayers++
       this.games = []
       this.rating = new Rating(this)
@@ -89,9 +100,9 @@ export class Player {
 
 export class Bot extends Player {
    version: Version
-   constructor (id: ID, version: Version) {
+   constructor (id?: ID | null, version?: Version | null) {
       super(id)
-      this.version = version
+      this.version = version ?? new Version(0, 1, 0)
    }
 }
 
@@ -105,10 +116,12 @@ export class Rating {
    }
 
    certaintyAgainstPlayers (players: gameParticipants): number {
+      const playersCopy = players.slice()
+
       let totalCertainty = 0
       for (const player of players) {
          if (player === this.player) {
-            players.splice(players.indexOf(player), 1) // Delete player to correct players.length
+            playersCopy.splice(players.indexOf(player), 1) // Delete player to correct players.length
             continue
          }
          totalCertainty += this.certaintyAgainstPlayer(player)
@@ -131,6 +144,12 @@ export class Rating {
    }
 }
 
+/**
+ * SemVer implementation
+ * 
+ * If you disobey the semver spec, such as setting the major version to "1/2",
+ * then all operations on the version have undefined functionality
+ */
 export class Version {
    major: number
    minor: number
@@ -140,12 +159,38 @@ export class Version {
 
    // prerelease is only a suggestion. It's the part after a hyphen
    // metadata is only a suggestion. It's the part after a minus sign.
-   constructor (major: number, minor: number, patch: number, prerelease?: string, metadata?: string) {
+   constructor (major: number, minor: number, patch: number, prerelease?: string | null, metadata?: string | null) {
+      if (!Number.isInteger(major)) {
+         throw RangeError(`major version part given (${major}) is not an integer`)
+      }
+      if (!Number.isInteger(minor)) {
+         throw RangeError(`minor version part given (${minor}) is not an integer`)
+      }
+      if (!Number.isInteger(patch)) {
+         throw RangeError(`patch version part given (${patch}) is not an integer`)
+      }
+
+      if (major < 0) {
+         throw RangeError(`major version part given (${major}) is less than zero`)
+      }
+      if (minor < 0) {
+         throw RangeError(`minor version part given (${minor}) is less than zero`)
+      }
+      if (patch < 0) {
+         throw RangeError(`patch version part given (${patch}) is less than zero`)
+      }
+
       this.major = major
       this.minor = minor
       this.patch = patch
       this.prerelease = prerelease ?? null
       this.metadata = metadata ?? null
+   }
+
+   // So that you can use > and < to compare precedence
+   valueOf (): string {
+      let string = ''
+      return string
    }
 
    toString (): string {
@@ -160,7 +205,7 @@ export class Version {
    }
 }
 
-export function updatePlayerStats (players: gameParticipants, result: Result): void {
+function updatePlayerStats (players: gameParticipants, result: Result): void {
    for (const playerA of players) {
       for (const playerB of players) {
          if (playerA === playerB) {
@@ -197,7 +242,7 @@ export function updatePlayerStats (players: gameParticipants, result: Result): v
       // Thanks to https://gamedev.stackexchange.com/questions/55441/player-ranking-using-elo-with-more-than-two-players
       return (
          totalExpected / (
-            Player.totalPlayers * (Player.totalPlayers - 1) / 2
+            players.length * (players.length - 1) / 2
          )
       )
    })
@@ -210,6 +255,7 @@ export function updatePlayerStats (players: gameParticipants, result: Result): v
 
    console.assert(
       expected.reduce((accum, curr) => accum + curr) > 0.999999999 &&
-      expected.reduce((accum, curr) => accum + curr) < 1.000000001
+      expected.reduce((accum, curr) => accum + curr) < 1.000000001,
+      `[${expected.join(', ')}], [${certainty.join(', ')}], [${players.map(player => player.rating.value).join(', ')}]`
    )
 }
