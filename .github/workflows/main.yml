@@ -30,8 +30,11 @@ jobs:
       
       - name: Setup Node.js
         uses: actions/setup-node@v2.1.5
+        with:
+          node-version: '14'
+          check-latest: true
 
-      - run: npm ci
+      - run: npm install --include=dev
 
       - run: npm test
       
