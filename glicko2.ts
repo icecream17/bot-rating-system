@@ -215,7 +215,7 @@ export class Glicko2Rating {
 }
 
 
-export class Game {
+export class Glicko2Game {
    static totalGames = 0
 
    readonly id: ID
@@ -274,7 +274,7 @@ export class Game {
    }
 }
 
-export class Player {
+export class Glicko2Player {
    static totalPlayers: number = 0
 
    id: ID
@@ -289,7 +289,7 @@ export class Player {
    }
 }
       
-export class Bot extends Player {
+export class Glicko2Bot extends Glicko2Player {
    version: Version
    constructor (id?: ID | null, version?: Version | null) {
       super(id)
