@@ -38,7 +38,7 @@ function addGameResultToRatingPeriod (gameResult: Result) {
  * @param results - "The scores against each opponent"
  * So if a player wins against Bob and Bob2, you would pass in the results: [1, 1]
  */
-function updatePlayerStats () {
+export function updatePlayerStats () {
    // Step 1: Initialize all player rating stats (done)
 
    // Step 2:
