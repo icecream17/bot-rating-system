@@ -4,7 +4,7 @@ export type PlayerMap = {
    [key in ID]: number
 }
 
-export type GameParticipants = Readonly<[Glicko2Player, Glicko2Player, ...Glicko2Player[]]>
+export type gameParticipants = Readonly<[Glicko2Player, Glicko2Player, ...Glicko2Player[]]>
 
 
 export type Result = PlayerMap
@@ -21,13 +21,13 @@ export const Defaults = {
    convergenceTolerance: 0.000001
 } as const
 
-export const Playerbase = [] as Player[]
+export const Playerbase = [] as Glicko2Player[]
 
 // --------------------------------
 // System Functions
 
 let resultsToParse: Result[] = []
-function addPlayer (player: Player): void {
+function addPlayer (player: Glicko2Player): void {
    Playerbase.push(player)
 }
 
@@ -155,7 +155,7 @@ export function updatePlayerStats () {
 
 // Estimated variance of a rating based on game outcomes
 // (The actual formula only uses the stats of the opponents that were played)
-function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Player, opponentIDs: ID[]): [number, Record<ID, number>] {
+function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Glicko2Player, opponentIDs: ID[]): [number, Record<ID, number>] {
    // [Σ g(opponent φ)² * E(player μ, opponent μ, opponent φ) * (1 - E(player μ, opponent μ, opponent φ))] ^ -1
 
    let total = 0
@@ -228,14 +228,14 @@ export class Glicko2Game {
    result: ResultValues | null
 
    constructor (players: gameParticipants, id?: ID | null, startImmediately: boolean = false) {
-      this.id = id ?? Game.totalGames
+      this.id = id ?? Glicko2Game.totalGames
 
       this.players = players
       this.startTime = startImmediately ? Date.now() : null
       this.finishTime = null
       this.result = null
 
-      Game.totalGames++
+      Glicko2Game.totalGames++
 
       for (const player of players) {
          if (!player.games.includes(this)) {
@@ -282,10 +282,10 @@ export class Glicko2Player {
 
    id: ID
    rating: Glicko2Rating
-   games: Game[]
+   games: Glicko2Game[]
 
    constructor (id?: ID | null) {
-      this.id = id ?? Player.totalPlayers++
+      this.id = id ?? Glicko2Player.totalPlayers++
       this.games = []
       this.rating = new Glicko2Rating()
       addPlayer(this)
