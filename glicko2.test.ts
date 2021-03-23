@@ -14,7 +14,7 @@
    along with bot-rating-system.  If not, see <https://www.gnu.org/licenses/>.
 *******************************************************************************/
 
-import { PlayerMap, Results, Defaults, Playerbase, Glicko2Rating, Game, Player, updatePlayerStats } from './glicko2'
+import { PlayerMap, Result, Defaults, Playerbase, Glicko2Rating, Glicko2Game, Glicko2Player, Glicko2Bot, updatePlayerStats } from './glicko2'
 
 describe('Defaults', () => {
    test('Values which cannot be changed', () => {
@@ -27,8 +27,8 @@ describe('Defaults', () => {
    test('Not totally wrong', () => {
       expect(Defaults.ratingVolatility).toBeGreaterThan(0)
       expect(Defaults.ratingVolatility).toBeLessThan(1000)
-      expect(Defaults.ratingTau).toBeGreaterThanOrEqual(0)
-      expect(Defaults.ratingTau).toBeLessThan(5)
+      expect(Defaults.systemTau).toBeGreaterThanOrEqual(0)
+      expect(Defaults.systemTau).toBeLessThan(5)
       expect(Defaults.systemRatingPeriodLength).toBeGreaterThan(0)
       expect(Defaults.systemRatingPeriodLength).not.toBe(Infinity)
       expect(Defaults.convergenceTolerance).toBeGreaterThanOrEqual(0)
@@ -37,8 +37,8 @@ describe('Defaults', () => {
 })
 
 describe('System', () => {
-   const playerA = new Player()
-   const playerB = new Player()
+   const playerA = new Glicko2Player()
+   const playerB = new Glicko2Player()
 
    test('New players have a rating', () => {
       expect(playerA.rating).toBeInstanceOf(Glicko2Rating)
@@ -50,26 +50,26 @@ describe('System', () => {
    })
 
    test('After ABBA, A.rating === B.rating', () => {
-      const game1 = new Game([playerA, playerB], undefined, true)
+      const game1 = new Glicko2Game([playerA, playerB], undefined, true)
       game1.finish([1, 0])
-      const game2 = new Game([playerA, playerB], undefined, true)
+      const game2 = new Glicko2Game([playerA, playerB], undefined, true)
       game2.finish([0, 1])
-      const game3 = new Game([playerA, playerB], undefined, true)
+      const game3 = new Glicko2Game([playerA, playerB], undefined, true)
       game3.finish([0, 1])
-      const game4 = new Game([playerA, playerB], undefined, true)
+      const game4 = new Glicko2Game([playerA, playerB], undefined, true)
       game4.finish([1, 0])
 
       updatePlayerStats()
       expect(playerA.rating.value).toBeCloseTo(playerB.rating.value)
    })
 
-   const random = new Bot(null, new Version(1, 0, 0))
-   const plusPtOne = new Bot(null, new Version(1, 0, 0))
-   const plusPtTwo = new Bot(null, new Version(1, 0, 0))
+   const random = new Glicko2Bot(null, new Version(1, 0, 0))
+   const plusPtOne = new Glicko2Bot(null, new Version(1, 0, 0))
+   const plusPtTwo = new Glicko2Bot(null, new Version(1, 0, 0))
 
    test('random < plusPtOne < plusPtTwo', () => {
       for (let i = 0; i < 100; i++) {
-         const game5thru104 = new Game([random, plusPtOne, plusPtTwo], undefined, true)
+         const game5thru104 = new Glicko2Game([random, plusPtOne, plusPtTwo], undefined, true)
          const scores = [Math.random(), Math.random() + 0.1, Math.random() + 0.2] as const
          const total = scores[0] + scores[1] + scores[2]
          // @ts-expect-error seriously?
