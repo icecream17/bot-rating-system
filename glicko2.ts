@@ -1,8 +1,11 @@
-import { gameParticipants, Result as ResultValues, ID, Version } from "./index"
+import { Result as ResultValues, ID, Version } from "./index"
 
 export type PlayerMap = {
    [key in ID]: number
 }
+
+export type GameParticipants = Readonly<[Glicko2Player, Glicko2Player, ...Glicko2Player[]]>
+
 
 export type Result = PlayerMap
 
