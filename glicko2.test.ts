@@ -82,7 +82,7 @@ describe('System', () => {
          random: random.rating.value,
          plusPtOne: plusPtOne.rating.value,
          plusPtTwo: plusPtTwo.rating.value,
-         certainty: random.rating.certaintyAgainstPlayers([plusPtOne, plusPtTwo])
+         RD: (plusPtOne.rating.deviation + plusPtTwo.rating.deviation) / 2
       })
 
       expect(random.rating.value).toBeLessThan(plusPtOne.rating.value)
