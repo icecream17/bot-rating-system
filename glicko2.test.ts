@@ -15,6 +15,7 @@
 *******************************************************************************/
 
 import { PlayerMap, Result, Defaults, Playerbase, Glicko2Rating, Glicko2Game, Glicko2Player, Glicko2Bot, updatePlayerStats } from './glicko2'
+import { Version } from './index'
 
 describe('Defaults', () => {
    test('Values which cannot be changed', () => {
