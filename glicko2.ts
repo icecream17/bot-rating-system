@@ -1,4 +1,4 @@
-import { gameParticipants, Result as ResultValues, ID } from "./index"
+import { gameParticipants, Result as ResultValues, ID, Version } from "./index"
 
 export type PlayerMap = {
    [key in ID]: number
@@ -288,3 +288,12 @@ export class Player {
       addPlayer(this)
    }
 }
+      
+export class Bot extends Player {
+   version: Version
+   constructor (id?: ID | null, version?: Version | null) {
+      super(id)
+      this.version = version ?? new Version(0, 1, 0)
+   }
+}
+
