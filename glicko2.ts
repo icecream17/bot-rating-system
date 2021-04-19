@@ -71,6 +71,7 @@ export function updatePlayerStats () {
 
       const m = opponentIDs.length
 
+      // doing step 6 if no games happened
       if (Object.keys(scores).length === 0) {
          const pre_playerφ = Math.sqrt(__squared(playerφ) + __squared(playerσ))
          const new_playerφ = pre_playerφ
