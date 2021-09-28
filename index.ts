@@ -142,6 +142,11 @@ export class Rating {
    expectedOutcome (rating: Rating): number {
       return 1 / (1 + (10 ** ((rating.value - this.value) / Defaults.ratingInterval)))
    }
+
+   /** Resets the rating */
+   reset() {
+      this.value = Defaults.ratingValue
+   }
 }
 
 /**
@@ -228,6 +233,8 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
             playerB.gamesAgainst[playerA.id]++
          }
       }
+
+      playerA.rating.reset()
    }
 
    const expected = players.map(player => {
