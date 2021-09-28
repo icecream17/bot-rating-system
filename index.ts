@@ -85,7 +85,6 @@ export class Player {
    games: Game[]
    rating: Rating
    gamesAgainst: {
-      // @ts-expect-error
       [key: ID]: number
    }
 
@@ -131,8 +130,7 @@ export class Rating {
    }
 
    certaintyAgainstPlayer (player: Player): number {
-      // @ts-expect-error
-      const gamesAgainstPlayer = (this.player.gamesAgainst[player.id] as number)
+      const gamesAgainstPlayer = this.player.gamesAgainst[player.id]
       const lastCertaintyAgainstPlayer = 1 - (Defaults.ratingCertaintyCoefficient ** (gamesAgainstPlayer - 1))
       const currentCertaintyAgainstPlayer = 1 - (Defaults.ratingCertaintyCoefficient ** (gamesAgainstPlayer))
       return (lastCertaintyAgainstPlayer + currentCertaintyAgainstPlayer) / 2
@@ -217,20 +215,16 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
             continue
          }
 
-         if (!(playerB.id in playerA.gamesAgainst)) {
-            // @ts-expect-error
-            playerA.gamesAgainst[playerB.id] = 1
-         } else {
-            // @ts-expect-error
+         if (playerB.id in playerA.gamesAgainst) {
             playerA.gamesAgainst[playerB.id]++
+         } else {
+            playerA.gamesAgainst[playerB.id] = 1
          }
 
-         if (!(playerA.id in playerB.gamesAgainst)) {
-            // @ts-expect-error
-            playerB.gamesAgainst[playerA.id] = 1
-         } else {
-            // @ts-expect-error
+         if (playerA.id in playerB.gamesAgainst) {
             playerB.gamesAgainst[playerA.id]++
+         } else {
+            playerB.gamesAgainst[playerA.id] = 1
          }
       }
 
