@@ -136,11 +136,7 @@ export interface Outcome {
 
 export class Rating {
    public value: number = Defaults.ratingValue
-   player: Player
-
-   constructor (public player: Player) {
-      this.player = player
-   }
+   constructor (public player: Player) {}
 
    /** Resets the rating */
    reset() {
