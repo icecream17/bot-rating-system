@@ -31,8 +31,9 @@ export const Defaults = {
    convergenceTolerance: 0.000001,
 } as const
 
-export type ID = Readonly<number | string | symbol>
+export type ID = Readonly<number | string>
 export type Result = Record<ID, number>
+export type PlayerMap = Result
 export type gameParticipants = Readonly<[Player, Player, ...Player[]]>
 
 export const gameIsDeterministic = true // IMPORTANT
@@ -41,15 +42,13 @@ export class Game {
    static totalGames = 0
 
    readonly id: ID
-   readonly players: gameParticipants
    startTime: number | null
    finishTime: number | null
    result: Result | null
 
-   constructor (players: gameParticipants, id?: ID | null, startImmediately: boolean = false) {
+   constructor (public readonly players: gameParticipants, id?: ID | null, startImmediately: boolean = false) {
       this.id = id ?? Game.totalGames
 
-      this.players = players
       this.startTime = startImmediately ? Date.now() : null
       this.finishTime = null
       this.result = null
@@ -150,8 +149,8 @@ export class Rating {
 }
 
 export class Glicko2Rating extends Rating {
-   public deviation = Defaults.ratingDeviation
-   public volatility = Defaults.ratingVolatility
+   public deviation: number = Defaults.ratingDeviation
+   public volatility: number = Defaults.ratingVolatility
 }
 
 /**
@@ -261,7 +260,7 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
 
       const relativeScores = {} as Record<ID, number>
       for (const key in scores) {
-         scores[key] = scores[key][0] / (scores[key][0] + scores[key][1])
+         relativeScores[key] = scores[key][0] / (scores[key][0] + scores[key][1])
       }
 
       // Optimization
@@ -271,7 +270,7 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
       const [v, Eparts] = _v(μ, gφ, σ, player, opponentIDs)
 
       // Step 4:
-      const sigmaOptimization = opponentIDs.reduce((total: number, id: ID) => gφ[id] * (scores[id] - Eparts[id]), 0)
+      const sigmaOptimization = opponentIDs.reduce((total: number, id: ID) => gφ[id] * (relativeScores[id] - Eparts[id]), 0)
       const delta = v * sigmaOptimization
 
       // Step 5.1:
@@ -336,7 +335,7 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
 
 // Estimated variance of a rating based on game outcomes
 // (The actual formula only uses the stats of the opponents that were played)
-function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Glicko2Player, opponentIDs: ID[]): [number, Record<ID, number>] {
+function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Player, opponentIDs: ID[]): [number, Record<ID, number>] {
    // [Σ g(opponent φ)² * E(player μ, opponent μ, opponent φ) * (1 - E(player μ, opponent μ, opponent φ))] ^ -1
 
    let total = 0
