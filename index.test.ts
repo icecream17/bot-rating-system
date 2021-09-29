@@ -20,26 +20,30 @@
 import { Defaults, Player, Bot, Rating, Version, Game, Result } from './index'
 
 describe('Defaults', () => {
+   test('Values which cannot be changed', () => {
+      expect(Defaults.glicko2ScaleFactor).toBe(173.7178)
+      expect(Defaults.ratingInterval).toBe(400)
+      expect(Defaults.ratingValue).toBe(1500)
+      expect(Defaults.ratingDeviation).toBe(350)
+   })
+
    test('Not totally wrong', () => {
-      expect(Defaults.ratingCertaintyCoefficient).toBeGreaterThan(0)
-      expect(Defaults.ratingCertaintyCoefficient).toBeLessThanOrEqual(1)
-      expect(Defaults.ratingInterval).not.toBe(Infinity)
-      expect(Defaults.ratingInterval).not.toBe(-Infinity)
-      expect(Defaults.ratingInterval).not.toBe(NaN)
-      expect(Defaults.ratingValue).not.toBe(Infinity)
-      expect(Defaults.ratingValue).not.toBe(-Infinity)
-      expect(Defaults.ratingValue).not.toBe(NaN)
-      expect(Defaults.ratingK).not.toBe(Infinity)
-      expect(Defaults.ratingK).not.toBe(-Infinity)
-      expect(Defaults.ratingK).not.toBe(NaN)
+      expect(Defaults.ratingVolatility).toBeGreaterThan(0)
+      expect(Defaults.ratingVolatility).toBeLessThan(1000)
+      expect(Defaults.systemTau).toBeGreaterThanOrEqual(0)
+      expect(Defaults.systemTau).toBeLessThan(5)
+      // expect(Defaults.systemRatingPeriodLength).toBeGreaterThan(0)
+      // expect(Defaults.systemRatingPeriodLength).not.toBe(Infinity)
+      expect(Defaults.convergenceTolerance).toBeGreaterThanOrEqual(0)
+      expect(Defaults.convergenceTolerance).toBeLessThanOrEqual(0.000001)
    })
 })
 
 describe('System', () => {
-   const playerA = new Bot()
-   const playerB = new Bot()
+   const playerA = new Bot(false)
+   const playerB = new Bot(false)
 
-   test('New players havve a rating', () => {
+   test('New players have a rating', () => {
       expect(playerA.rating).toBeInstanceOf(Rating)
       expect(playerB.rating).toBeInstanceOf(Rating)
    })
@@ -79,7 +83,7 @@ describe('System', () => {
       game4.finish({
          [playerA.id]: 1,
          [playerB.id]: 0,
-      }))
+      })
 
       expect(playerA.rating.value).toBeCloseTo(playerB.rating.value)
    })
