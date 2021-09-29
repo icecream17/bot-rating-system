@@ -232,13 +232,7 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
 
    // Step 2:
    for (const player of players) {
-      const scores = {} as Record<ID, [number, number]>
-      const opponentIDs = Object.keys(result).filter(id => id !== player.id)
-      for (const ID of opponentIDs) {
-         scores[ID] ??= [0, 0]
-         scores[ID][0] += result[player.id]
-         scores[ID][1] += result[ID]
-      }
+      const opponentIDs = Object.keys(result).filter(id => String(id) !== String(player.id))
 
       const playerμ = μ[player.id]
       const playerφ = φ[player.id]
@@ -254,13 +248,13 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
          continue;
       }
 
+      // Optimization - moved this part of step 2 over here
       const relativeScores = {} as Record<ID, number>
-      for (const key in scores) {
-         relativeScores[key] = scores[key][0] / (scores[key][0] + scores[key][1])
+      const gφ = {} as Record<ID, number>
+      for (const ID of opponentIDs) {
+         relativeScores[ID] = result[player.id] / (result[player.id] + result[ID])
+         gφ[ID] = _g(φ[id])
       }
-
-      // Optimization
-      const gφ = Object.fromEntries(opponentIDs.map(id => [id, _g(φ[id])]))
 
       // Step 3 + Optimization
       const [v, Eparts] = _v(μ, gφ, σ, player, opponentIDs)
@@ -353,7 +347,7 @@ function _gSquared (φ: number) {
 }
 
 function _g (φ: number) {
-   return 1 / Math.sqrt(1 + (3 * (__squared(φ) / __squared(Math.PI))))
+   return 1 / Math.sqrt(1 + (3 * (φ ** 2 / Math.PI ** 2)))
 }
 
 /* Unused */
