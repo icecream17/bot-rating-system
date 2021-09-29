@@ -253,7 +253,7 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
       const gφ = {} as Record<ID, number>
       for (const ID of opponentIDs) {
          relativeScores[ID] = result[player.id] / (result[player.id] + result[ID])
-         gφ[ID] = _g(φ[id])
+         gφ[ID] = _g(φ[ID])
       }
 
       // Step 3 + Optimization
