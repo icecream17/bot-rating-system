@@ -28,7 +28,7 @@ export const Defaults = {
    // Non constants - can change
    ratingVolatility: 0.06,
    systemTau: 0.2,
-   covergenceTolerance: 0.000001,
+   convergenceTolerance: 0.000001,
 } as const
 
 export type ID = Readonly<number | string | symbol>
