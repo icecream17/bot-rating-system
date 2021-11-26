@@ -29,7 +29,7 @@
    "devDependencies": {
       "@types/jest": "^27.0.0",
       "@typescript-eslint/eslint-plugin": "^4.26.0",
-      "chalk": "^4.1.1",
+      "chalk": "^5.0.0",
       "codecov": "^3.8.2",
       "eslint": "^8.0.0",
       "eslint-config-standard-with-typescript": "^21.0.1",
