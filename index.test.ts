@@ -40,8 +40,8 @@ describe('Defaults', () => {
 })
 
 describe('System', () => {
-   const playerA = new Bot(Dt.CHANGE)
-   const playerB = new Bot(Dt.CHANGE)
+   const playerA = new Bot(null, Dt.CHANGE)
+   const playerB = new Bot(null, Dt.CHANGE)
 
    test('New players have a rating', () => {
       expect(playerA.rating).toBeInstanceOf(Rating)
