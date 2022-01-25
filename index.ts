@@ -17,26 +17,46 @@
    along with bot-rating-system.  If not, see <https://www.gnu.org/licenses/>.
 *******************************************************************************/
 
-// Change as you want
+/// This rating system uses a modified version of the glicko2 rating system.
+/// It uses various optimizations depending on the deterministicness of the
+/// players and the ruleset.
+
+/// Deterministicness
+export const enum Dt {
+   DETERMINISTIC, /// Dt,     Doesn't change over time  [alphabetical]
+   RANDOM,        /// Non-Dt, Doesn't change over time  [random_mover]
+   CHANGE,        /// Non-Dt, Does change over time     [human]
+   VERSIONED,     /// Dt,     Does change over time     []
+}
+
+function isDeterministic(dtness: Dt) {
+    return dtness === Dt.DETERMINISTIC || dtness === Dt.VERSIONED
+}
+
+// Deeply const
 export const Defaults = {
-   // Constants - cannot change
    glicko2ScaleFactor: 173.7178,
-   ratingInterval: 400, // If PlayerA.rating.value === 400 + PlayerB.rating.value, 10x something
+   ratingInterval: 400,
    ratingValue: 1500,
    ratingDeviation: 350,
+} as const
 
-   // Non constants - can change
+// Non constants - can change
+/// Settings for the current Ruleset
+/// Note the difference between Ruleset (chess) and Game (chess)
+/// A game is like an instance of a ruleset
+export const Ruleset = {
    ratingVolatility: 0.06,
    systemTau: 0.2,
    convergenceTolerance: 0.000001,
-} as const
+   deterministicness: Dt.DETERMINISTIC,
+   orderMatters: true, // Is there a difference between being the first or second player?
+}
 
 export type ID = Readonly<number | string>
 export type Result = Record<ID, number>
 export type PlayerMap = Result
-export type gameParticipants = Readonly<[Player, Player, ...Player[]]>
-
-export const gameIsDeterministic = true // IMPORTANT
+export type GameParticipants = Readonly<[Player, Player, ...Player[]]> // Array because maybe the order matters
 
 export class Game {
    static totalGames = 0
@@ -46,7 +66,7 @@ export class Game {
    finishTime: number | null
    result: Result | null
 
-   constructor (public readonly players: gameParticipants, id?: ID | null, startImmediately: boolean = false) {
+   constructor (public readonly players: GameParticipants, id?: ID | null, startImmediately: boolean = false) {
       this.id = id ?? Game.totalGames
 
       this.startTime = startImmediately ? Date.now() : null
@@ -76,61 +96,77 @@ export class Game {
       }
 
       this.result = result
-      updatePlayerStats(this.players, result)
+      updatePlayerRatings(this.players, result)
       return (this.finishTime = Date.now()) // intentional return assign
    }
 }
 
 export class Player {
    static totalPlayers: number = 0
+   static getUniqueID () {
+      return Player.totalPlayers
+   }
 
    id: ID
+
+   /// Games past or present
    games: Game[]
+
    rating: Glicko2Rating
+
+   /// How a player did against other players
    outcome: {
       [key: ID]: Outcome
    }
 
-   constructor (id?: ID | null) {
-      this.id = id ?? Player.totalPlayers++
+   constructor (public dtness = Dt.CHANGE) {
+      Player.totalPlayers++
+      this.id = Player.getUniqueID()
       this.games = []
       this.rating = new Glicko2Rating(this)
-      this.outcome = {} // How a player did against other players
-      Player.totalPlayers++
+      this.outcome = {}
    }
 
-   updateOutcome(isDeterministic: boolean, player2: Player, scoreAgainst: number) {
+   // TODO: deterministicResult
+   updateOutcome(isDeterministic: boolean, player2: Player, scoreAgainst: number, _players: GameParticipants) {
       if (player2.id in this.outcome) {
          this.outcome[player2.id].games++
          this.outcome[player2.id].total += scoreAgainst
-         if (isDeterministic) {
-            // TODO: Maybe the results are different because the first and second player switched
-            this.outcome[player2.id].deterministicResult ??= scoreAgainst
-            if (this.outcome[player2.id].deterministicResult !== scoreAgainst) {
-               throw new RangeError('The game is determinstic but two different scores happened')
-            }
-         }
+         // TODO
       } else {
          this.outcome[player2.id] = {
             games: 1,
             total: scoreAgainst,
-            deterministicResult: isDeterministic ? scoreAgainst : null,
+            deterministicResult: null, // TODO
          }
       }
    }
 }
 
 export class Bot extends Player {
-   version: Version
-   constructor (public isDeterministic: boolean, id?: ID | null, version?: Version | null) {
-      super(id)
-      this.version = version ?? new Version(0, 1, 0)
+   #version: Version
+   previousVersions: Map<Version, Player>
+   constructor (version?: Version | null, ...args: ConstructorParameters<typeof Player>) {
+      super(...args)
+      this.#version = version ?? new Version(0, 1, 0)
+      this.previousVersions = new Map()
+   }
+
+   get version() {
+       return this.#version
+   }
+
+   set version(version: Version) {
+      const copy = Object.assign(Object.create(Player.prototype) as Player, this)
+      this.previousVersions.set(this.#version, copy)
+      this.#version = version
+      Object.assign(this, new Player())
    }
 }
 
 export interface Outcome {
    games: number
-   total: number // Total score
+   total: number /// Total score, where score = scoreThis / (scoreThis + scoreOther)
    deterministicResult: number | null
 }
 
@@ -146,8 +182,20 @@ export class Rating {
 
 export class Glicko2Rating extends Rating {
    public deviation: number = Defaults.ratingDeviation
-   public volatility: number = Defaults.ratingVolatility
+   public volatility: number = Ruleset.ratingVolatility
+
+   override reset() {
+      this.value = Defaults.ratingValue
+      this.deviation = Defaults.ratingDeviation
+      this.volatility = Ruleset.ratingVolatility
+   }
 }
+
+export type VersionStr =
+   | `${number}.${number}.${number}`
+   | `${number}.${number}.${number}+${string}`
+   | `${number}.${number}.${number}-${string}`
+   | `${number}.${number}.${number}+${string}-${string}`
 
 /**
  * SemVer implementation
@@ -198,28 +246,32 @@ export class Version {
       return string
    }
 
-   toString (): string {
-      let string = `${this.major}.${this.minor}.${this.patch}`
+   toString (): VersionStr {
+      let string: VersionStr = `${this.major}.${this.minor}.${this.patch}` as const
       if (this.prerelease !== null) {
-         string += `+${this.prerelease}`
+         string = `${string}+${this.prerelease}` as const
       }
       if (this.metadata !== null) {
-         string += `-${this.metadata}`
+         string = `${string}-${this.metadata}` as const
       }
       return string
    }
 }
 
-function updatePlayerStats (players: gameParticipants, result: Result): void {
-   const isDeterministic = gameIsDeterministic && players.every(player => player instanceof Bot && player.isDeterministic)
+function updatePlayerRatings (players: GameParticipants, result: Result): void {
+   const resultIsDeterministic =
+      Ruleset.orderMatters === false && // TODO: Support different orders
+      isDeterministic(Ruleset.deterministicness) &&
+      players.every(player => isDeterministic(player.dtness))
+
    for (const playerA of players) {
       for (const playerB of players) {
          if (playerA === playerB) {
             continue
          }
 
-         playerA.updateOutcome(isDeterministic, playerB, result[playerA.id] / (result[playerA.id] + result[playerB.id]))
-         playerB.updateOutcome(isDeterministic, playerA, result[playerB.id] / (result[playerA.id] + result[playerB.id]))
+         playerA.updateOutcome(resultIsDeterministic, playerB, result[playerA.id] / (result[playerA.id] + result[playerB.id]), players)
+         playerB.updateOutcome(resultIsDeterministic, playerA, result[playerB.id] / (result[playerA.id] + result[playerB.id]), players)
       }
    }
 
@@ -273,11 +325,11 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
          B = Math.log(__squared(delta) - __squared(playerφ) - v)
       } else {
          let k = 1
-         while (_f(a - (k * Defaults.systemTau), delta, playerφ, v, a) < 0) {
+         while (_f(a - (k * Ruleset.systemTau), delta, playerφ, v, a) < 0) {
             k++
          }
 
-         B = a - (k * Defaults.systemTau)
+         B = a - (k * Ruleset.systemTau)
       }
 
       // Step 5.3
@@ -285,7 +337,7 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
       let fB = _f(B, delta, playerφ, v, a)
 
       // Step 5.4
-      while (Math.abs(B - A) > Defaults.convergenceTolerance) {
+      while (Math.abs(B - A) > Ruleset.convergenceTolerance) {
          // 5.4a
          let C = A + (((A - B) * fA) / (fB - fA))
          let fC = _f(C, delta, playerφ, v, a)
@@ -323,8 +375,8 @@ function updatePlayerStats (players: gameParticipants, result: Result): void {
    }
 }
 
-// Estimated variance of a rating based on game outcomes
-// (The actual formula only uses the stats of the opponents that were played)
+/// Estimated variance of a rating based on game outcomes
+/// (The actual formula only uses the stats of the opponents that were played)
 function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Player, opponentIDs: ID[]): [number, Record<ID, number>] {
    // [Σ g(opponent φ)² * E(player μ, opponent μ, opponent φ) * (1 - E(player μ, opponent μ, opponent φ))] ^ -1
 
@@ -332,7 +384,7 @@ function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Player, oppon
    const Eparts = [] as [ID, number][]
 
    opponentIDs.forEach((id: ID) => {
-      let Epart = _E_optimization(player.rating.value, μ[id], gφ[id])
+      const Epart = _E_optimization(player.rating.value, μ[id], gφ[id])
       total += gφ[id] * gφ[id] * Epart * (1 - Epart)
       Eparts.push([id, Epart])
    })
@@ -343,11 +395,11 @@ function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Player, oppon
 function _gSquared (φ: number) {
    // g(φ) = 1 / sqrt(stuff)
    // g(φ)² = 1 / stuff
-   return 1 / (1 + (3 * (φ ** 2 / Math.PI ** 2)))
+   return 1 / (1 + (3 * __squared(φ / Math.PI)))
 }
 
 function _g (φ: number) {
-   return 1 / Math.sqrt(1 + (3 * (φ ** 2 / Math.PI ** 2)))
+   return 1 / Math.sqrt(1 + (3 * __squared(φ / Math.PI)))
 }
 
 /* Unused */
@@ -363,7 +415,7 @@ function _f(x: number, delta: number, playerφ: number, v: number, a: number) {
    const e2TheX = Math.E ** x
    const tempPart = __squared(playerφ) + v + e2TheX
    return (
-      ((e2TheX * (__squared(delta) - tempPart)) / (2 * __squared(tempPart))) - ((x - a) / __squared(Defaults.systemTau))
+      ((e2TheX * (__squared(delta) - tempPart)) / (2 * __squared(tempPart))) - ((x - a) / __squared(Ruleset.systemTau))
    )
 }
 
