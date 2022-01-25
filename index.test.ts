@@ -17,7 +17,7 @@
    along with bot-rating-system.  If not, see <https://www.gnu.org/licenses/>.
 *******************************************************************************/
 
-import { Defaults, Player, Bot, Rating, Version, Game, Result } from './index'
+import { Defaults, Dt, Player, Bot, Rating, Version, Game, Result, Ruleset } from './index'
 
 describe('Defaults', () => {
    test('Values which cannot be changed', () => {
@@ -28,20 +28,20 @@ describe('Defaults', () => {
    })
 
    test('Not totally wrong', () => {
-      expect(Defaults.ratingVolatility).toBeGreaterThan(0)
-      expect(Defaults.ratingVolatility).toBeLessThan(1000)
-      expect(Defaults.systemTau).toBeGreaterThanOrEqual(0)
-      expect(Defaults.systemTau).toBeLessThan(5)
+      expect(Ruleset.ratingVolatility).toBeGreaterThan(0)
+      expect(Ruleset.ratingVolatility).toBeLessThan(1000)
+      expect(Ruleset.systemTau).toBeGreaterThanOrEqual(0)
+      expect(Ruleset.systemTau).toBeLessThan(5)
       // expect(Defaults.systemRatingPeriodLength).toBeGreaterThan(0)
       // expect(Defaults.systemRatingPeriodLength).not.toBe(Infinity)
-      expect(Defaults.convergenceTolerance).toBeGreaterThanOrEqual(0)
-      expect(Defaults.convergenceTolerance).toBeLessThanOrEqual(0.000001)
+      expect(Ruleset.convergenceTolerance).toBeGreaterThanOrEqual(0)
+      expect(Ruleset.convergenceTolerance).toBeLessThanOrEqual(0.000001)
    })
 })
 
 describe('System', () => {
-   const playerA = new Bot(false)
-   const playerB = new Bot(false)
+   const playerA = new Bot(Dt.CHANGE)
+   const playerB = new Bot(Dt.CHANGE)
 
    test('New players have a rating', () => {
       expect(playerA.rating).toBeInstanceOf(Rating)
@@ -88,9 +88,9 @@ describe('System', () => {
       expect(playerA.rating.value).toBeCloseTo(playerB.rating.value)
    })
 
-   const random = new Bot(false, null, new Version(1, 0, 0))
-   const plusPtOne = new Bot(false, null, new Version(1, 0, 0))
-   const plusPtTwo = new Bot(false, null, new Version(1, 0, 0))
+   const random = new Bot(new Version(1, 0, 1))
+   const plusPtOne = new Bot(new Version(1, 0, 1))
+   const plusPtTwo = new Bot(new Version(1, 0, 1))
 
    test('random < plusPtOne < plusPtTwo', () => {
       for (let i = 0; i < 100; i++) {
