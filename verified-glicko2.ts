@@ -183,7 +183,7 @@ export default class Glicko2{
     players: Player[];
     players_index: number;
     private _volatility_algorithm: ((v: number,delta: number) => number);
-    constructor ({tau, rating, rd, vol, volatility_algorithm} = {tau: 0.5, rating: 1500, rd: 350, vol: 0.06, volatility_algorithm: 'newprocedure' as keyof typeof volatility_algorithms}){
+    constructor ({tau = 0.5, rating = 1500, rd = 350, vol = 0.06, volatility_algorithm = 'newprocedure'}: {tau: number, rating: number, rd: number, vol: number, volatility_algorithm: keyof typeof volatility_algorithms}){
         // Internal glicko2 parameter. "Reasonable choices are between 0.3 and
         // 1.2, though the system should be tested to decide which value results
         // in greatest predictive accuracy."
@@ -245,12 +245,12 @@ export default class Glicko2{
 
     
 
-    makePlayer (rating: number, rd: number, vol: number) {
+    makePlayer (rating?: number, rd?: number, vol?: number) {
         //We do not expose directly createInternalPlayer in order to prevent the assignation of a custom player id whose uniqueness could not be guaranteed
         return this._createInternalPlayer(rating, rd, vol);
     };
 
-    _createInternalPlayer (rating: number, rd: number, vol: number, id?: number){
+    _createInternalPlayer (rating?: number, rd?: number, vol?: number, id?: number){
         if (id === undefined){
             id = this.players_index;
             this.players_index = this.players_index + 1;
@@ -261,7 +261,7 @@ export default class Glicko2{
                 return candidate;
             }
         }
-        var player = new Player(rating || this._default_rating, rd || this._default_rd, vol || this._default_vol, this._tau, this._default_rating, this._volatility_algorithm, id);
+        var player = new Player(rating ?? this._default_rating, rd ?? this._default_rd, vol ?? this._default_vol, this._tau, this._default_rating, this._volatility_algorithm, id);
         this.players[id] = player;
         return player;
     };
@@ -277,7 +277,7 @@ export default class Glicko2{
         player2.addResult(player1, 1 - outcome);
     }
 
-    updateRatings(matches?: [Player, Player, 1 | 0.5][]) {
+    updateRatings(matches?: [Player, Player, number][]) {
         if(matches instanceof Race){
             matches = matches.getMatches();
         }
