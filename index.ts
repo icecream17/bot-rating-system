@@ -46,11 +46,18 @@ export const Defaults = {
 /// Note the difference between Ruleset (chess) and Game (chess)
 /// A game is like an instance of a ruleset
 export const Ruleset = {
-   ratingVolatility: 0.06,
-   systemTau: 0.2,
+   ratingVolatility: 0.06, // Default player rating volatility
+   systemTau: 0.2, // Constrains the change of volatility over time
    convergenceTolerance: 0.000001,
    deterministicness: Dt.DETERMINISTIC,
    orderMatters: true, // Is there a difference between being the first or second player?
+   
+   // TODO: Ruleset API
+   Games: new Set(),
+   Players: new Set(),
+//    Outcomes: new function OutcomeNode () {
+//       return new Proxy({ value: null }, { get(self, prop) {} }
+//    },
 }
 
 export type ID = Readonly<number | string>
@@ -60,14 +67,17 @@ export type GameParticipants = Readonly<[Player, Player, ...Player[]]> // Array 
 
 export class Game {
    static totalGames = 0
+   static getUniqueID() {
+      return Game.totalGames++
+   }
 
    readonly id: ID
    startTime: number | null
    finishTime: number | null
    result: Result | null
 
-   constructor (public readonly players: GameParticipants, id?: ID | null, startImmediately: boolean = false) {
-      this.id = id ?? Game.totalGames
+   constructor (public readonly players: GameParticipants, startImmediately: boolean = false) {
+      this.id = Game.getUniqueID()
 
       this.startTime = startImmediately ? Date.now() : null
       this.finishTime = null
@@ -97,14 +107,15 @@ export class Game {
 
       this.result = result
       updatePlayerRatings(this.players, result)
+      Ruleset.games.add(this)
       return (this.finishTime = Date.now()) // intentional return assign
    }
 }
 
 export class Player {
-   static totalPlayers: number = 0
+   static totalPlayers = 0
    static getUniqueID () {
-      return Player.totalPlayers
+      return Player.totalPlayers++
    }
 
    id: ID
@@ -114,32 +125,27 @@ export class Player {
 
    rating: Glicko2Rating
 
-   /// How a player did against other players
-   outcome: {
-      [key: ID]: Outcome
-   }
-
    constructor (public dtness = Dt.CHANGE) {
-      Player.totalPlayers++
+      Ruleset.Players.add(this)
       this.id = Player.getUniqueID()
       this.games = []
       this.rating = new Glicko2Rating(this)
-      this.outcome = {}
+//       this.outcome = {}
    }
 
    // TODO: deterministicResult
    updateOutcome(isDeterministic: boolean, player2: Player, scoreAgainst: number, _players: GameParticipants) {
-      if (player2.id in this.outcome) {
-         this.outcome[player2.id].games++
-         this.outcome[player2.id].total += scoreAgainst
-         // TODO
-      } else {
-         this.outcome[player2.id] = {
-            games: 1,
-            total: scoreAgainst,
-            deterministicResult: null, // TODO
-         }
-      }
+//       if (player2.id in this.outcome) {
+//          this.outcome[player2.id].games++
+//          this.outcome[player2.id].total += scoreAgainst
+//          // TODO
+//       } else {
+//          this.outcome[player2.id] = {
+//             games: 1,
+//             total: scoreAgainst,
+//             deterministicResult: null, // TODO
+//          }
+//       }
    }
 }
 
@@ -157,10 +163,16 @@ export class Bot extends Player {
    }
 
    set version(version: Version) {
+      // Ruleset.Players.delete(this)
       const copy = Object.assign(Object.create(Player.prototype) as Player, this)
+      Ruleset.Players.add(copy)
       this.previousVersions.set(this.#version, copy)
       this.#version = version
-      Object.assign(this, new Player())
+
+      const player = new Player()
+      Ruleset.Players.delete(player)
+      Object.assign(this, player)
+      // Ruleset.Players.add(this)
    }
 }
 
@@ -275,32 +287,33 @@ function updatePlayerRatings (players: GameParticipants, result: Result): void {
       }
    }
 
+   // Use Glicko-2 for now
+   // Step 1: Initialize all player rating stats (done)
+
+   // Step 2: Convert ratings and RD's onto the Glicko-2 scale
    const μ = Object.fromEntries(players.map(player => [player.id, (player.rating.value - Defaults.ratingValue) / Defaults.glicko2ScaleFactor]))
    const φ = Object.fromEntries(players.map(player => [player.id, player.rating.deviation / Defaults.glicko2ScaleFactor]))
    const σ = Object.fromEntries(players.map(player => [player.id, player.rating.volatility]))
 
-   // Use glicko2 for now
-   // Step 1: Initialize all player rating stats (done)
-
-   // Step 2:
    for (const player of players) {
-      const opponentIDs = Object.keys(result).filter(id => String(id) !== String(player.id))
-
+      // Step 2 continued: Setup variables
       const playerμ = μ[player.id]
       const playerφ = φ[player.id]
       const playerσ = σ[player.id]
 
-      // doing step 6 if no games happened
-      // (Object.keys(scores).length === 0) === (opponentIDs.length === 0)
-      if (opponentIDs.length === 0) {
-         const pre_playerφ = Math.sqrt(__squared(playerφ) + __squared(playerσ))
-         const new_playerφ = pre_playerφ
-         const new_playerRD = Defaults.glicko2ScaleFactor * new_playerφ
-         player.rating.deviation = new_playerRD
-         continue;
-      }
+      // TODO: Game intervals
+//       // If no games do Step 6
+//       // Object.keys(scores).length === opponentIDs.length
+      const opponentIDs = Object.keys(result).filter(id => String(id) !== String(player.id))
+//       if (opponentIDs.length === 0) {
+//          const pre_playerφ = Math.sqrt(__squared(playerφ) + __squared(playerσ))
+//          const new_playerφ = pre_playerφ
+//          const new_playerRD = Defaults.glicko2ScaleFactor * new_playerφ
+//          player.rating.deviation = new_playerRD
+//          continue;
+//       }
 
-      // Optimization - moved this part of step 2 over here
+      // Step 2 continued: Setup scores + Setup gφSquared optimization
       const relativeScores = {} as Record<ID, number>
       const gφ = {} as Record<ID, number>
       for (const ID of opponentIDs) {
@@ -309,10 +322,11 @@ function updatePlayerRatings (players: GameParticipants, result: Result): void {
       }
 
       // Step 3 + Optimization
+      // Estimated variance
       const [v, Eparts] = _v(μ, gφ, σ, player, opponentIDs)
 
       // Step 4:
-      const sigmaOptimization = opponentIDs.reduce((total: number, id: ID) => gφ[id] * (relativeScores[id] - Eparts[id]), 0)
+      const sigmaOptimization = opponentIDs.reduce((total: number, id: ID) => total + gφ[id] * (relativeScores[id] - Eparts[id]), 0)
       const delta = v * sigmaOptimization
 
       // Step 5.1:
@@ -321,8 +335,10 @@ function updatePlayerRatings (players: GameParticipants, result: Result): void {
       // Step 5.2:
       let A: number = a
       let B: number
-      if (__squared(delta) > __squared(playerφ) + v) {
-         B = Math.log(__squared(delta) - __squared(playerφ) - v)
+      
+      const φφPlusV = __squared(playerφ) + v
+      if (__squared(delta) > φφPlusV) {
+         B = Math.log(__squared(delta) - φφPlusV)
       } else {
          let k = 1
          while (_f(a - (k * Ruleset.systemTau), delta, playerφ, v, a) < 0) {
@@ -339,8 +355,8 @@ function updatePlayerRatings (players: GameParticipants, result: Result): void {
       // Step 5.4
       while (Math.abs(B - A) > Ruleset.convergenceTolerance) {
          // 5.4a
-         let C = A + (((A - B) * fA) / (fB - fA))
-         let fC = _f(C, delta, playerφ, v, a)
+         const C = A + (((A - B) * fA) / (fB - fA))
+         const fC = _f(C, delta, playerφ, v, a)
 
          // 5.4b
          if (fC * fB < 0) {
@@ -375,23 +391,25 @@ function updatePlayerRatings (players: GameParticipants, result: Result): void {
    }
 }
 
-/// Estimated variance of a rating based on game outcomes
-/// (The actual formula only uses the stats of the opponents that were played)
+/// Estimated variance of a rating based on game outcomes and opponent stats
+/// Returns [variance result, EpartsOptimization]
 function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Player, opponentIDs: ID[]): [number, Record<ID, number>] {
    // [Σ g(opponent φ)² * E(player μ, opponent μ, opponent φ) * (1 - E(player μ, opponent μ, opponent φ))] ^ -1
+   // 1 / [Σ gφ² * Epart * (1 - Epart)]
 
    let total = 0
-   const Eparts = [] as [ID, number][]
+   const Eparts = {} as Record<ID, number>
 
-   opponentIDs.forEach((id: ID) => {
+   for (const id of opponentIDs) {
       const Epart = _E_optimization(player.rating.value, μ[id], gφ[id])
       total += gφ[id] * gφ[id] * Epart * (1 - Epart)
-      Eparts.push([id, Epart])
-   })
+      Eparts[id] = Epart
+   }
 
-   return [1 / total, Object.fromEntries(Eparts)] // Same as total ** -1
+   return [1 / total, Eparts]
 }
 
+/* Unused */
 function _gSquared (φ: number) {
    // g(φ) = 1 / sqrt(stuff)
    // g(φ)² = 1 / stuff
@@ -399,6 +417,7 @@ function _gSquared (φ: number) {
 }
 
 function _g (φ: number) {
+   // Optimization: φ²/π² === (φ/π)²
    return 1 / Math.sqrt(1 + (3 * __squared(φ / Math.PI)))
 }
 
