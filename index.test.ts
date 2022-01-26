@@ -53,7 +53,7 @@ describe('System', () => {
    })
 
    test('If A vs B and A wins, A.rating > B.rating', () => {
-      const game1 = new Game([playerA, playerB], undefined, true)
+      const game1 = new Game([playerA, playerB], true)
       game1.finish({
          [playerA.id]: 1,
          [playerB.id]: 0,
@@ -63,13 +63,13 @@ describe('System', () => {
    })
 
    test('After A wins once, if B wins twice, B.rating > A.rating', () => {
-      const game2 = new Game([playerA, playerB], undefined, true)
+      const game2 = new Game([playerA, playerB], true)
       game2.finish({
          [playerA.id]: 0,
          [playerB.id]: 1,
       })
 
-      const game3 = new Game([playerA, playerB], undefined, true)
+      const game3 = new Game([playerA, playerB], true)
       game3.finish({
          [playerA.id]: 0,
          [playerB.id]: 1,
@@ -79,7 +79,7 @@ describe('System', () => {
    })
 
    test('After ABBA, A.rating === B.rating', () => {
-      const game4 = new Game([playerA, playerB], undefined, true)
+      const game4 = new Game([playerA, playerB], true)
       game4.finish({
          [playerA.id]: 1,
          [playerB.id]: 0,
@@ -94,7 +94,7 @@ describe('System', () => {
 
    test('random < plusPtOne < plusPtTwo', () => {
       for (let i = 0; i < 100; i++) {
-         const game5thru104 = new Game([random, plusPtOne, plusPtTwo], undefined, true)
+         const game5thru104 = new Game([random, plusPtOne, plusPtTwo], true)
          const scores = [Math.random(), Math.random() + 0.1, Math.random() + 0.2] as const
          const total = scores[0] + scores[1] + scores[2]
          game5thru104.finish({
