@@ -183,7 +183,7 @@ export default class Glicko2{
     players: Player[];
     players_index: number;
     private _volatility_algorithm: ((v: number,delta: number) => number);
-    constructor ({tau = 0.5, rating = 1500, rd = 350, vol = 0.06, volatility_algorithm = 'newprocedure'}: {tau: number, rating: number, rd: number, vol: number, volatility_algorithm: keyof typeof volatility_algorithms}){
+    constructor ({tau = 0.5, rating = 1500, rd = 350, vol = 0.06, volatility_algorithm = 'newprocedure'}: {tau?: number, rating?: number, rd?: number, vol?: number, volatility_algorithm?: keyof typeof volatility_algorithms}){
         // Internal glicko2 parameter. "Reasonable choices are between 0.3 and
         // 1.2, though the system should be tested to decide which value results
         // in greatest predictive accuracy."
