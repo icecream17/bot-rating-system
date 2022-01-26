@@ -18,7 +18,7 @@
 *******************************************************************************/
 
 import { Defaults, Dt, Player, Bot, Rating, Version, Game, Result, Ruleset } from './index'
-import Glicko2 from './verified-glicko2.js'
+import Glicko2 from './verified-glicko2'
 
 describe('Defaults', () => {
    test('Values which cannot be changed', () => {
