@@ -107,7 +107,7 @@ export class Game {
 
       this.result = result
       updatePlayerRatings(this.players, result)
-      Ruleset.games.add(this)
+      Ruleset.Games.add(this)
       return (this.finishTime = Date.now()) // intentional return assign
    }
 }
