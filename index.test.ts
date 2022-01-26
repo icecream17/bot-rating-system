@@ -18,6 +18,7 @@
 *******************************************************************************/
 
 import { Defaults, Dt, Player, Bot, Rating, Version, Game, Result, Ruleset } from './index'
+import Glicko2 from './verified-glicko2.js'
 
 describe('Defaults', () => {
    test('Values which cannot be changed', () => {
@@ -42,6 +43,14 @@ describe('Defaults', () => {
 describe('System', () => {
    const playerA = new Bot(null, Dt.CHANGE)
    const playerB = new Bot(null, Dt.CHANGE)
+   const ranking = new Glicko2({
+      tau: Ruleset.systemTau,
+      rating: Defaults.ratingValue,
+      rd: Defaults.ratingDeviation,
+      vol: Ruleset.ratingVolatility,
+   })
+   const glickoA = ranking.makePlayer()
+   const glickoB = ranking.makePlayer()
 
    test('New players have a rating', () => {
       expect(playerA.rating).toBeInstanceOf(Rating)
@@ -52,6 +61,7 @@ describe('System', () => {
       expect(playerA.id).not.toBe(playerB.id)
    })
 
+   /// Also checking if the glicko2 implementation is valid
    test('If A vs B and A wins, A.rating > B.rating', () => {
       const game1 = new Game([playerA, playerB], true)
       game1.finish({
@@ -59,6 +69,10 @@ describe('System', () => {
          [playerB.id]: 0,
       })
 
+      ranking.updateRatings([[glickoA, glickoB, 1]])
+
+      expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
+      expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
       expect(playerA.rating.value).toBeGreaterThan(playerB.rating.value)
    })
 
@@ -75,6 +89,10 @@ describe('System', () => {
          [playerB.id]: 1,
       })
 
+      ranking.updateRatings([[glickoA, glickoB, 0], [glickoA, glickoB, 0]])
+
+      expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
+      expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
       expect(playerB.rating.value).toBeGreaterThan(playerA.rating.value)
    })
 
@@ -85,14 +103,18 @@ describe('System', () => {
          [playerB.id]: 0,
       })
 
+      ranking.updateRatings([[glickoA, glickoB, 1]])
+
+      expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
+      expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
       expect(playerA.rating.value).toBeCloseTo(playerB.rating.value)
    })
 
-   const random = new Bot(new Version(1, 0, 1))
-   const plusPtOne = new Bot(new Version(1, 0, 1))
-   const plusPtTwo = new Bot(new Version(1, 0, 1))
-
    test('random < plusPtOne < plusPtTwo', () => {
+      const random = new Bot(new Version(1, 0, 1))
+      const plusPtOne = new Bot(new Version(1, 0, 1))
+      const plusPtTwo = new Bot(new Version(1, 0, 1))
+
       for (let i = 0; i < 100; i++) {
          const game5thru104 = new Game([random, plusPtOne, plusPtTwo], true)
          const scores = [Math.random(), Math.random() + 0.1, Math.random() + 0.2] as const
