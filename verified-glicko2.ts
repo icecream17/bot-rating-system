@@ -2,7 +2,7 @@
 // which is under the MIT License: https://github.com/mmai/glicko2js/blob/master/LICENSE.md
 
 
-var scalingFactor = 173.7178;
+const scalingFactor = 173.7178;
 
 class Race {
     matches: [Player, Player, 1 | 0.5][];
