@@ -48,6 +48,7 @@ describe('System', () => {
       rating: Defaults.ratingValue,
       rd: Defaults.ratingDeviation,
       vol: Ruleset.ratingVolatility,
+      precision: Ruleset.convergenceTolerance,
    })
    const glickoA = ranking.makePlayer()
    const glickoB = ranking.makePlayer()
