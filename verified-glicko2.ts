@@ -42,13 +42,15 @@ class Player {
     __rd!: number;
     __vol!: number;
     _tau: number;
+    _epsilon: number;
     id: number;
     adv_ranks: number[];
     adv_rds: number[];
     outcomes: number[];
 
-    constructor (rating: number, rd: number, vol: number, tau: number, public defaultRating: number, public volatility_algorithm: (v: number, delta:number) => number, id: number){
+    constructor (rating: number, rd: number, vol: number, tau: number, epsilon: number, public defaultRating: number, public volatility_algorithm: (v: number, delta:number) => number, id: number){
         this._tau = tau;
+        this._epsilon = epsilon;
 
         this.setRating(rating);
         this.setRd(rd);
@@ -177,17 +179,21 @@ class Player {
 //=========================  Glicko2 class =============================================
 export default class Glicko2{
     private _tau: number;
+    private _epsilon: number;
     private _default_rating: number;
     private _default_rd: number;
     private _default_vol: number;
     players: Player[];
     players_index: number;
     private _volatility_algorithm: ((v: number,delta: number) => number);
-    constructor ({tau = 0.5, rating = 1500, rd = 350, vol = 0.06, volatility_algorithm = 'newprocedure'}: {tau?: number, rating?: number, rd?: number, vol?: number, volatility_algorithm?: keyof typeof volatility_algorithms}){
+    constructor ({tau = 0.5, precision = 0.0000001, rating = 1500, rd = 350, vol = 0.06, volatility_algorithm = 'newprocedure'}: {tau?: number, precision?: number, rating?: number, rd?: number, vol?: number, volatility_algorithm?: keyof typeof volatility_algorithms}){
         // Internal glicko2 parameter. "Reasonable choices are between 0.3 and
         // 1.2, though the system should be tested to decide which value results
         // in greatest predictive accuracy."
         this._tau = tau
+
+        // Internal glicko2 parameter, "epsilon" or the "convergence tolerance"
+        this._epsilon = precision
 
         // Default rating
         this._default_rating = rating;
@@ -261,7 +267,7 @@ export default class Glicko2{
                 return candidate;
             }
         }
-        var player = new Player(rating ?? this._default_rating, rd ?? this._default_rd, vol ?? this._default_vol, this._tau, this._default_rating, this._volatility_algorithm, id);
+        var player = new Player(rating ?? this._default_rating, rd ?? this._default_rd, vol ?? this._default_vol, this._tau, this._epsilon, this._default_rating, this._volatility_algorithm, id);
         this.players[id] = player;
         return player;
     };
@@ -429,7 +435,6 @@ var volatility_algorithms = {
         //Step 5.1
         var A = Math.log(Math.pow(this.__vol, 2));
         var f = this._makef(delta, v, A);
-        var epsilon = 0.0000001;
 
         //Step 5.2
         var B, k;
@@ -449,7 +454,7 @@ var volatility_algorithms = {
 
         //Step 5.4
         var C, fC;
-        while (Math.abs(B - A) > epsilon){
+        while (Math.abs(B - A) > this._epsilon){
             C = A + (A - B) * fA /(fB - fA );
             fC = f(C);
             if (fC * fB < 0){
@@ -468,7 +473,6 @@ var volatility_algorithms = {
         //Step 5.1
         var A = Math.log(Math.pow(this.__vol, 2));
         var f = this._makef(delta, v, A);
-        var epsilon = 0.0000001;
 
         //Step 5.2
         var B, k;
@@ -490,7 +494,7 @@ var volatility_algorithms = {
 
         //Step 5.4
         var C, fC;
-        while (Math.abs(B - A) > epsilon){
+        while (Math.abs(B - A) > this._epsilon){
             C = A + (A - B) * fA /(fB - fA );
             fC = f(C);
             if (fC * fB < 0){
@@ -513,7 +517,7 @@ var volatility_algorithms = {
         var x1 = 0;
         var d,h1,h2;
 
-        while (Math.abs(x0 - x1) > 0.00000001){
+        while (Math.abs(x0 - x1) > this._epsilon){
             // New iteration, so x(i) becomes x(i-1)
             x0 = x1;
             d = Math.pow(this.__rating, 2) + v + Math.exp(x0);
