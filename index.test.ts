@@ -69,11 +69,14 @@ describe('System', () => {
          [playerB.id]: 0,
       })
 
+      expect(playerA.rating.value).toBeGreaterThan(playerB.rating.value)
+   })
+
+   test('Same as verified-glicko2 (1)', () => {
       ranking.updateRatings([[glickoA, glickoB, 1]])
 
       expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
       expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
-      expect(playerA.rating.value).toBeGreaterThan(playerB.rating.value)
    })
 
    test('After A wins once, if B wins twice, B.rating > A.rating', () => {
@@ -89,11 +92,14 @@ describe('System', () => {
          [playerB.id]: 1,
       })
 
+      expect(playerB.rating.value).toBeGreaterThan(playerA.rating.value)
+   })
+
+   test('Same as verified-glicko2 (2)', () => {
       ranking.updateRatings([[glickoA, glickoB, 0], [glickoA, glickoB, 0]])
 
       expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
       expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
-      expect(playerB.rating.value).toBeGreaterThan(playerA.rating.value)
    })
 
    test('After ABBA, A.rating === B.rating', () => {
@@ -103,11 +109,14 @@ describe('System', () => {
          [playerB.id]: 0,
       })
 
+      expect(playerA.rating.value).toBeCloseTo(playerB.rating.value)
+   })
+
+   test('Same as verified-glicko2 (3)', () => {
       ranking.updateRatings([[glickoA, glickoB, 1]])
 
       expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
       expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
-      expect(playerA.rating.value).toBeCloseTo(playerB.rating.value)
    })
 
    test('random < plusPtOne < plusPtTwo', () => {
