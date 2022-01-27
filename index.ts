@@ -304,7 +304,7 @@ function updatePlayerRatings (players: GameParticipants, result: Result): void {
       // TODO: Game intervals
 //       // If no games do Step 6
 //       // Object.keys(scores).length === opponentIDs.length
-      const opponentIDs = Object.keys(result).filter(id => String(id) !== String(player.id))
+      const opponentIDs = players.filter(player2 => player !== player2).map(player2 => player2.id)
 //       if (opponentIDs.length === 0) {
 //          const pre_playerφ = Math.sqrt(__squared(playerφ) + __squared(playerσ))
 //          const new_playerφ = pre_playerφ
@@ -313,7 +313,7 @@ function updatePlayerRatings (players: GameParticipants, result: Result): void {
 //          continue;
 //       }
 
-      // Step 2 continued: Setup scores + Setup gφSquared optimization
+      // Step 2 continued: Setup scores + Setup gφ optimization
       const relativeScores = {} as Record<ID, number>
       const gφ = {} as Record<ID, number>
       for (const ID of opponentIDs) {
@@ -323,7 +323,7 @@ function updatePlayerRatings (players: GameParticipants, result: Result): void {
 
       // Step 3 + Optimization
       // Estimated variance
-      const [v, Eparts] = _v(μ, gφ, σ, player, opponentIDs)
+      const [v, Eparts] = _v(μ, gφ, playerμ, opponentIDs)
 
       // Step 4:
       const sigmaOptimization = opponentIDs.reduce((total: number, id: ID) => total + gφ[id] * (relativeScores[id] - Eparts[id]), 0)
@@ -393,7 +393,7 @@ function updatePlayerRatings (players: GameParticipants, result: Result): void {
 
 /// Estimated variance of a rating based on game outcomes and opponent stats
 /// Returns [variance result, EpartsOptimization]
-function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Player, opponentIDs: ID[]): [number, Record<ID, number>] {
+function _v (μ: PlayerMap, gφ: PlayerMap, playerμ: number, opponentIDs: ID[]): [number, Record<ID, number>] {
    // [Σ g(opponent φ)² * E(player μ, opponent μ, opponent φ) * (1 - E(player μ, opponent μ, opponent φ))] ^ -1
    // 1 / [Σ gφ² * Epart * (1 - Epart)]
 
@@ -401,7 +401,7 @@ function _v (μ: PlayerMap, gφ: PlayerMap, σ: PlayerMap, player: Player, oppon
    const Eparts = {} as Record<ID, number>
 
    for (const id of opponentIDs) {
-      const Epart = _E_optimization(player.rating.value, μ[id], gφ[id])
+      const Epart = _E_optimization(playerμ, μ[id], gφ[id])
       total += gφ[id] * gφ[id] * Epart * (1 - Epart)
       Eparts[id] = Epart
    }
