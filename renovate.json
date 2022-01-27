@@ -1,0 +1,7 @@
+{
+  "extends": [
+    ":automergeMinor",
+    "config:base"
+  ],
+  "rangeStrategy": "update-lockfile"
+}
