@@ -26,9 +26,9 @@ class Race {
             if (players.length === 0) return [];
 
             var player1 = players.shift() as { player: Player; position: number; }
-            var player1_results  = players.map(function(player2){
-                return [player1.player, player2.player, (player1.position < player2.position) ? 1 : 0.5] as const;
-            }) as [Player, Player, 1 | 0.5][];
+            var player1_results  = players.map(player2 =>
+                [player1.player, player2.player, (player1.position < player2.position) ? 1 : 0.5] as const
+            ) as [Player, Player, 1 | 0.5][];
 
             return player1_results.concat(computeMatches(players));
         }
