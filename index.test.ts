@@ -115,10 +115,14 @@ describe('System', () => {
       const plusPtOne = new Bot(new Version(1, 0, 1))
       const plusPtTwo = new Bot(new Version(1, 0, 1))
 
+      const totalscores = [0, 0, 0]
       for (let i = 0; i < 100; i++) {
          const game5thru104 = new Game([random, plusPtOne, plusPtTwo], true)
          const scores = [Math.random(), Math.random() + 0.1, Math.random() + 0.2] as const
          const total = scores[0] + scores[1] + scores[2]
+         totalscores[0] += scores[0] / total
+         totalscores[1] += scores[1] / total
+         totalscores[2] += scores[2] / total
          game5thru104.finish({
             [random.id]: scores[0] / total,
             [plusPtOne.id]: scores[1] / total,
@@ -130,6 +134,7 @@ describe('System', () => {
          random: random.rating.value,
          plusPtOne: plusPtOne.rating.value,
          plusPtTwo: plusPtTwo.rating.value,
+         totalscores,
       })
 
       expect(random.rating.value).toBeLessThan(plusPtOne.rating.value)
