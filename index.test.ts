@@ -17,7 +17,7 @@
    along with bot-rating-system.  If not, see <https://www.gnu.org/licenses/>.
 *******************************************************************************/
 
-import { Defaults, Dt, Player, Bot, Rating, Version, Game, Result, Ruleset } from './index'
+import { Defaults, DtNess, Ruleset, Player, Bot, Glicko2Rating as Rating, Version, Game, Result } from './index'
 import Glicko2 from './verified-glicko2'
 
 describe('Defaults', () => {
@@ -29,29 +29,33 @@ describe('Defaults', () => {
    })
 
    test('Not totally wrong', () => {
-      expect(Ruleset.ratingVolatility).toBeGreaterThan(0)
-      expect(Ruleset.ratingVolatility).toBeLessThan(1000)
-      expect(Ruleset.systemTau).toBeGreaterThanOrEqual(0)
-      expect(Ruleset.systemTau).toBeLessThan(5)
-      // expect(Defaults.systemRatingPeriodLength).toBeGreaterThan(0)
-      // expect(Defaults.systemRatingPeriodLength).not.toBe(Infinity)
-      expect(Ruleset.convergenceTolerance).toBeGreaterThanOrEqual(0)
-      expect(Ruleset.convergenceTolerance).toBeLessThanOrEqual(0.000001)
+      const system = new Ruleset()
+      expect(system.ratingVolatility).toBeGreaterThan(0)
+      expect(system.ratingVolatility).toBeLessThan(1000)
+      expect(system.systemTau).toBeGreaterThanOrEqual(0)
+      expect(system.systemTau).toBeLessThan(5)
+      expect(system.convergenceTolerance).toBeGreaterThanOrEqual(0)
+      expect(system.convergenceTolerance).toBeLessThanOrEqual(0.000001)
+
+      expect(system.ratingInterval).toBeGreaterThan(0)
+      expect(system.ratingInterval).not.toBe(Infinity)
    })
 })
 
 describe('System', () => {
-   const playerA = new Bot(null, Dt.CHANGE)
-   const playerB = new Bot(null, Dt.CHANGE)
-   const ranking = new Glicko2({
-      tau: Ruleset.systemTau,
+   const system = new Ruleset()
+   const playerA = system.Bot(DtNess.RANDOM)
+   const playerB = system.Bot(DtNess.RANDOM)
+
+   const glicko = new Glicko2({
+      tau: system.systemTau,
       rating: Defaults.ratingValue,
       rd: Defaults.ratingDeviation,
-      vol: Ruleset.ratingVolatility,
-      precision: Ruleset.convergenceTolerance,
+      vol: system.ratingVolatility,
+      precision: system.convergenceTolerance,
    })
-   const glickoA = ranking.makePlayer()
-   const glickoB = ranking.makePlayer()
+   const glickoA = glicko.makePlayer()
+   const glickoB = glicko.makePlayer()
 
    test('New players have a rating', () => {
       expect(playerA.rating).toBeInstanceOf(Rating)
@@ -62,82 +66,87 @@ describe('System', () => {
       expect(playerA.id).not.toBe(playerB.id)
    })
 
+   test("Volatility is the same", () => {
+      expect(playerA.rating.volatility).toBe(system.ratingVolatility)
+      expect(playerA.rating.volatility).toBeCloseTo(glickoA.getVol())
+   })
+
    /// Also checking if the glicko2 implementation is valid
    test('If A vs B and A wins, A.rating > B.rating', () => {
-      const game1 = new Game([playerA, playerB], true)
-      game1.finish({
-         [playerA.id]: 1,
-         [playerB.id]: 0,
-      })
+      const game1 = system.Game([playerA, playerB], true)
+      game1.finish([1, 0])
 
       expect(playerA.rating.value).toBeGreaterThan(playerB.rating.value)
    })
 
    test('Same as verified-glicko2 (1)', () => {
-      ranking.updateRatings([[glickoA, glickoB, 1]])
 
+      glicko.updateRatings([[glickoA, glickoB, 1]])
+
+      expect(playerA.rating.volatility).toBeCloseTo(glickoA.getVol())
       expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
       expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
    })
 
    test('After A wins once, if B wins twice, B.rating > A.rating', () => {
-      const game2 = new Game([playerA, playerB], true)
-      game2.finish({
-         [playerA.id]: 0,
-         [playerB.id]: 1,
-      })
+      console.debug = () => {};
 
-      const game3 = new Game([playerA, playerB], true)
-      game3.finish({
-         [playerA.id]: 0,
-         [playerB.id]: 1,
-      })
+      const game2 = system.Game([playerA, playerB], true)
+      game2.finish([0, 1])
+
+      const game3 = system.Game([playerA, playerB], true)
+      game3.finish([0, 1])
 
       expect(playerB.rating.value).toBeGreaterThan(playerA.rating.value)
    })
 
-   test('Same as verified-glicko2 (2)', () => {
-      ranking.updateRatings([[glickoA, glickoB, 0], [glickoA, glickoB, 0]])
+   // One rating period is different from two
+   test.skip('Same as verified-glicko2 (2)', () => {
+      glicko.updateRatings([[glickoA, glickoB, 0], [glickoA, glickoB, 0]])
 
       expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
       expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
    })
 
    test('After ABBA, A.rating === B.rating', () => {
-      const game4 = new Game([playerA, playerB], true)
-      game4.finish({
-         [playerA.id]: 1,
-         [playerB.id]: 0,
-      })
+      const game4 = system.Game([playerA, playerB], true)
+      game4.finish([1, 0])
 
       expect(playerA.rating.value).toBeCloseTo(playerB.rating.value)
    })
 
-   test('Same as verified-glicko2 (3)', () => {
-      ranking.updateRatings([[glickoA, glickoB, 1]])
+   test.skip('Same as verified-glicko2 (3)', () => {
+      glicko.updateRatings([[glickoA, glickoB, 1]])
 
       expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
       expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
    })
 
+   test("If two deterministic games have different results there's an error", () => {
+      console.error = jest.fn()
+      const dtA = system.Bot(DtNess.DETERMINISTIC)
+      const dtB = system.Bot(DtNess.DETERMINISTIC)
+      system.Game([dtA, dtB], true).finish([1, 0])
+      expect(() => {
+         system.Game([dtA, dtB], true).finish([0, 1])
+      }).toThrow()
+   })
+
    test('random < plusPtOne < plusPtTwo', () => {
-      const random = new Bot(new Version(1, 0, 1))
-      const plusPtOne = new Bot(new Version(1, 0, 1))
-      const plusPtTwo = new Bot(new Version(1, 0, 1))
+      const random = system.Bot(DtNess.RANDOM, new Version(1, 0, 1))
+      const plusPtOne = system.Bot(DtNess.RANDOM, new Version(1, 0, 1))
+      const plusPtTwo = system.Bot(DtNess.RANDOM, new Version(1, 0, 1))
 
       const totalscores = [0, 0, 0]
-      for (let i = 0; i < 100; i++) {
-         const game5thru104 = new Game([random, plusPtOne, plusPtTwo], true)
-         const scores = [Math.random(), Math.random() + 0.1, Math.random() + 0.2] as const
-         const total = scores[0] + scores[1] + scores[2]
-         totalscores[0] += scores[0] / total
-         totalscores[1] += scores[1] / total
-         totalscores[2] += scores[2] / total
-         game5thru104.finish({
-            [random.id]: scores[0] / total,
-            [plusPtOne.id]: scores[1] / total,
-            [plusPtTwo.id]: scores[2] / total,
-         })
+      for (let i = 0; i < 42; i++) {
+         const game5thru104 = system.Game([random, plusPtOne, plusPtTwo], true)
+
+         // Notice how the scores are not adjusted
+         const scores = [Math.random(), Math.random() + .01, Math.random() + .02] as const
+         totalscores[0] += scores[0]
+         totalscores[1] += scores[1]
+         totalscores[2] += scores[2]
+         game5thru104.finish(scores)
       }
 
       console.info({
@@ -147,7 +156,21 @@ describe('System', () => {
          totalscores,
       })
 
-      expect(random.rating.value).toBeLessThan(plusPtOne.rating.value)
-      expect(plusPtOne.rating.value).toBeLessThan(plusPtTwo.rating.value)
+      const r = expect(random.rating.value)
+      if (totalscores[0] < totalscores[1]) {
+         r.toBeLessThan(plusPtOne.rating.value)
+      } else {
+         r.toBeGreaterThanOrEqual(plusPtOne.rating.value)
+      }
+      if (totalscores[0] < totalscores[2]) {
+         r.toBeLessThan(plusPtTwo.rating.value)
+      } else {
+         r.toBeGreaterThanOrEqual(plusPtTwo.rating.value)
+      }
+      if (totalscores[1] < totalscores[2]) {
+         expect(plusPtOne.rating.value).toBeLessThan(plusPtTwo.rating.value)
+      } else {
+         expect(plusPtOne.rating.value).toBeGreaterThanOrEqual(plusPtTwo.rating.value)
+      }
    })
 })

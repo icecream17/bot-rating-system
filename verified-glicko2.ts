@@ -167,7 +167,7 @@ class Player {
         }
         return v * tempSum;
     }
-    
+
     _makef (delta: number, v: number, a: number) {
         var pl = this;
         return function(x: number){
@@ -235,7 +235,7 @@ export default class Glicko2{
         this.players.forEach(player => player.update_rank())
     }
 
-/** 
+/**
  * Add players and match result to be taken in account for the new rankings calculation
  * players must have ids, they are not created if it has been done already.
  * @param {Object litteral} pl1 The first player
@@ -249,7 +249,7 @@ export default class Glicko2{
       return {pl1:pl1, pl2:pl2};
     }
 
-    
+
 
     makePlayer (rating?: number, rd?: number, vol?: number) {
         //We do not expose directly createInternalPlayer in order to prevent the assignation of a custom player id whose uniqueness could not be guaranteed
@@ -272,7 +272,7 @@ export default class Glicko2{
         return player;
     };
 
-  /** 
+  /**
    * Add a match result to be taken in account for the new rankings calculation
    * @param {Player} player1 The first player
    * @param {Player} player2 The second player
