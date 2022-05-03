@@ -21,9 +21,12 @@
 /// players and the ruleset.
 
 export const enum DtNess {
-   DETERMINISTIC, /// [alphabetical] - Always does the same thing
-   RANDOM, /// [random_mover] - Always uses the same algorithm
-   CHANGE, /// [human] - Can change over time
+   /// Always does the same thing - Example: alphabetical
+   DETERMINISTIC,
+   /// Always uses the same algorithm - Example: random_mover
+   RANDOM,
+   /// Can change over time - Example: human
+   CHANGE,
 }
 
 // Deeply const
@@ -41,14 +44,14 @@ type SubConstrParam<T extends abstract new (...args: any) => any> =
 type Timestamp = ReturnType<typeof Date.now>
 type RatingGroup = Game[]
 
-// Non constants - can change
 /// Note the difference between Ruleset (chess) and Game (chess)
 /// A game is like an instance of a ruleset
 /// Though in this case you call Ruleset.Game
 export class Ruleset {
+   // Non constants - can change
    /// Settings for the current Ruleset
    public readonly ratingVolatility = 0.06
-   public readonly systemTau = 0.2
+   public readonly systemTau = 0.2 // Constrains the change in players' volatilities over time
    public readonly convergenceTolerance = 0.000001
 
    public readonly ratingInterval = 1000 * 60 * 60 * 24
@@ -60,10 +63,10 @@ export class Ruleset {
    public games = new Set<Game>()
    public players = new Set<Player>()
    public ratingGroups = {
-      /// All deterministic games
+      /// Games between players whose DtNess is DETERMINISTIC
       deterministic: [] as RatingGroup,
 
-      /// Non deterministic games between players that don't change
+      /// Games between players whose DtNess is _not_ CHANGE
       dtRandom: [] as RatingGroup,
 
       /// Contains all non-deterministic games in multiple groups
@@ -102,33 +105,19 @@ export class Ruleset {
 
    /// Internal
    _updateGameFinished(game: Game) {
+      /// First check if the results of the game are valid
+      if (!Object.values(game.result).every(result => Number.isFinite())) {
+         return "Fail: A result was NaN, Infinity, or -Infinity"
+      }
+
       if (game.isDeterministic()) {
-         this._updateDeterministicGameFinished(game)
+         if (this._updateDeterministicGameFinished(game) === "duplicate") {
+            return "Noop: Deterministic game already happened"
+         }
       } else if (game.isDtnessRandom()) {
          this.ratingGroups.dtRandom.push(game)
       } else {
-         const timestamp = game.timestamp
-         if (timestamp < this.firstIntervalTimestamp) {
-            throw TypeError("The game was before the first game interval")
-         }
-
-         let lastRgTimestamp = [
-            ...this.ratingGroups.nonDeterministic.keys(),
-         ].find(
-            (rgTimestamp) =>
-               rgTimestamp < timestamp &&
-               timestamp < rgTimestamp + this.ratingInterval
-         )
-         if (lastRgTimestamp === undefined) {
-            lastRgTimestamp =
-               Math.floor(
-                  (timestamp - this.firstIntervalTimestamp) /
-                     this.ratingInterval
-               ) * this.ratingInterval
-            this.ratingGroups.nonDeterministic.set(lastRgTimestamp, [])
-         }
-
-         this.ratingGroups.nonDeterministic.get(lastRgTimestamp)!.push(game)
+         this._updateChangeGameFinished(game)
       }
       this.recalculateRatings()
    }
@@ -137,7 +126,7 @@ export class Ruleset {
    _updateDeterministicGameFinished(game: Game) {
       outerloop:
       for (const other of this.ratingGroups.deterministic) {
-         if (!(other.players.length === game.players.length)) {
+         if (other.players.length !== game.players.length) {
             continue
          }
          if (this.orderMatters) {
@@ -178,11 +167,30 @@ export class Ruleset {
       return "not duplicate"
    }
 
+   _updateChangeGameFinished(game: Game) {
+      const timestamp = game.timestamp
+      if (timestamp < this.firstIntervalTimestamp) {
+         throw TypeError("The game was before the first rating period")
+      }
+
+      const ratingGroupTheGameIsIn =
+         (timestamp - this.firstIntervalTimestamp) -
+         (timestamp - this.firstIntervalTimestamp) % this.ratingInterval +
+         this.firstIntervalTimestamp
+
+      const current = this.ratingGroups.nonDeterministic.get(ratingGroupTheGameIsIn)
+      if (current === undefined) {
+         this.ratingGroups.nonDeterministic.set(lastRgTimestamp, [game])
+      } else {
+         current.push(game)
+      }
+   }
+
    recalculateRatings() {
       this.players.forEach(player => player.rating.reset())
       updatePlayerRatings(this, calculateResultFromRatingGroup(
          this.ratingGroups.deterministic.concat(this.ratingGroups.dtRandom)
-      ))
+      ), false)
       const rI = [...this.ratingGroups.nonDeterministic.entries()].sort((a, b) => a[0] - b[0])
       for (let currI = this.firstIntervalTimestamp; rI.length;) {
          if (currI === rI[0][0]) {
@@ -237,22 +245,29 @@ export type GameParticipants = Readonly<[Player, Player, ...Player[]]> // Array 
 export type Scores =
    | [number, number, ...number[]]
    | readonly [number, number, ...number[]]
+
 function convertScoresToResult(
    players: GameParticipants,
    scores: Scores
 ): Result {
-   const playerScores = {} as Record<ID, number[]>
+
+   const playerScores = {} as Record<ID, [number, ...number[]]>
 
    // bug?: scores = [-1, 5] --> [-1/4, 5/4]
    const sum = __sum(scores)
    for (const [index, score] of scores.entries()) {
-      playerScores[players[index].id] ??= []
-      playerScores[players[index].id].push(score / sum)
+      // Prevent NaN from 0 / 0, but don't protect from Infinity, -Infinity, or NaN
+      const scoreAsPercentOfTotal = score === 0 ? 0 : score / sum
+      if (players[index].id in playerScores) {
+         playerScores[players[index].id].push(scoreAsPercentAsTotal)
+      } else {
+         playerScores[players[index].id] = [scoreAsPercentAsTotal]
+      }
    }
 
    const results = {} as Result
    for (const id in playerScores) {
-      results[id] = __sum(playerScores[id]) / playerScores[id].length
+      results[id] = __avg(playerScores[id])
    }
    return results
 }
@@ -300,6 +315,9 @@ export class Game {
       } else {
          throw ReferenceError("Game already finished")
       }
+      if (scores.length !== this.players.length) {
+         throw TypeError(`Scores must correspond to players, expected ${this.players.length} score(s) but got ${scores.length}`)
+      }
 
       this.scores = scores
       this.result = convertScoresToResult(this.players, scores)
@@ -330,6 +348,7 @@ export class Game {
    }
 }
 
+// TODO: The order of the players don't matter, but the player acts differently based on the order.
 export class Player {
    static nextID = 0
 
@@ -374,12 +393,6 @@ export class Bot extends Player {
    newVersion(version: Version) {
       return this.ruleset.Bot(this.dtness, version, this.versions)
    }
-}
-
-export interface Outcome {
-   games: number
-   total: number /// Total score, where score = scoreThis / (scoreThis + scoreOther)
-   deterministicResult: number | null
 }
 
 export class Glicko2Rating {
@@ -467,9 +480,9 @@ export class Version {
       this.metadata = metadata ?? null
    }
 
-   // So that you can use > and < to compare precedence
+   // TODO: So that you can use > and < to compare precedence
    valueOf(): string {
-      let string = ""
+      let string = String.fromCodePoint(this.major) + String.fromCodePoint(this.minor) + String.fromCodePoint(this.patch)
       return string
    }
 
@@ -498,36 +511,39 @@ function iteratorEvery<T>(
    return true
 }
 
+// http://www.glicko.net/glicko/glicko2.pdf
 function updatePlayerRatings(
    ruleset: Ruleset,
-   result: Record<ID, Result>
+   result: Record<ID, Result>,
+   updateNonInvolvedPlayers = true
 ): void {
-   const players = ruleset.players
+   const players = updateNonInvolvedPlayers
+      ? ruleset.players.filter(player => player.id in result)
+      : ruleset.players
 
    // Use Glicko-2 for now
    // Step 1: Initialize all player rating stats (done)
 
    // Step 2: Convert ratings and RD's onto the Glicko-2 scale
+   // + optimization: Calculate g(φ) beforehand
    const μ = {} as Record<ID, number>
    const φ = {} as Record<ID, number>
-   const σ = {} as Record<ID, number>
+   const gφ = {} as Record<ID, number>
    for (const player of players) {
       μ[player.id] =
-         (player.rating.value - Defaults.ratingValue) /
-         Defaults.glicko2ScaleFactor
+         (player.rating.value - Defaults.ratingValue) / Defaults.glicko2ScaleFactor
       φ[player.id] = player.rating.deviation / Defaults.glicko2ScaleFactor
-      σ[player.id] = player.rating.volatility
+      gφ[player.id] = _g(φ[player.id])
    }
 
    for (const player of players) {
-      // Step 2 continued: Setup variables
+      // Setup variables
       const playerμ = μ[player.id]
       const playerφ = φ[player.id]
-      const playerσ = σ[player.id]
+      const playerσ = player.rating.volatility
 
       // If no games do Step 6
-      // Object.keys(scores).length === opponentIDs.length
-      const opponentIDs = Object.keys(result[player.id] ?? {}) as ID[]
+      const opponentIDs = player.id in result ? Object.keys(result[player.id]) : [] as ID[]
       if (opponentIDs.length === 0) {
          const pre_playerφ = Math.sqrt(__squared(playerφ) + __squared(playerσ))
          const new_playerφ = pre_playerφ
@@ -536,49 +552,38 @@ function updatePlayerRatings(
          continue;
       }
 
-      // Step 2 continued: Setup scores + Setup gφ optimization
+      // Step 2 continued: Let s be the scores against each opponent
       const relativeScores = result[player.id]
-      const gφ = {} as Record<ID, number>
-      for (const ID of opponentIDs) {
-         gφ[ID] = _g(φ[ID])
-      }
 
-      // Step 3 + Optimization
-      // Estimated variance
+      // Step 3
+      // Estimated variance + Eparts optimization
       const [v, Eparts] = _v(μ, gφ, playerμ, opponentIDs)
 
       // Step 4:
       const sigmaOptimization = opponentIDs.reduce((total: number, id: ID) => total + gφ[id] * (relativeScores[id] - Eparts[id]), 0)
       const delta = v * sigmaOptimization // Because of optimization this is only used once
+
       // First some _f_optimization
       const playerφSquared = __squared(playerφ)
       const deltaSquared = __squared(delta)
       const systemTauSquared = __squared(ruleset.systemTau)
 
       // Step 5.1:
-      const a = Math.log(playerφSquared)
-      const _f_opt = _make_f_opt(
-         deltaSquared,
-         playerφSquared,
-         v,
-         a,
-         systemTauSquared
-      )
+      const a = 2 * Math.log(playerφ) // Optimization: ln(φ²) = 2ln(φ)
+      const _f_opt = _make_f_opt(deltaSquared, playerφSquared, v, a, systemTauSquared)
 
       // Step 5.2:
       let A: number = a
       let B: number
 
-      console.debug(playerφ, a, _f_opt(a - ruleset.systemTau))
+      // console.debug(playerφ, a, _f_opt(a - ruleset.systemTau))
 
       const φφPlusV = playerφSquared + v
       if (deltaSquared > φφPlusV) {
          B = Math.log(deltaSquared - φφPlusV)
       } else {
          let k = 1
-         while (
-            _f_opt(a - (k * ruleset.systemTau)) < 0
-         ) {
+         while (_f_opt(a - (k * ruleset.systemTau)) < 0) {
             k++
          }
 
@@ -610,7 +615,6 @@ function updatePlayerRatings(
 
       // Step 5.5
       const new_playerσ = Math.E ** (A / 2)
-      console.debug("vol", new_playerσ)
 
       // Step 6
       const pre_playerφ = Math.sqrt(playerφSquared + __squared(new_playerσ))
