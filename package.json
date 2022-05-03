@@ -28,7 +28,7 @@
    "homepage": "https://github.com/icecream17/bot-rating-system#readme",
    "devDependencies": {
       "@types/jest": "^27.4.1",
-      "@typescript-eslint/eslint-plugin": "^4.33.0",
+      "@typescript-eslint/eslint-plugin": "^5.22.0",
       "chalk": "^4.1.1",
       "codecov": "^3.8.2",
       "eslint": "^8.0.0",
