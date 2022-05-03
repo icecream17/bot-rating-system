@@ -259,9 +259,9 @@ function convertScoresToResult(
       // Prevent NaN from 0 / 0, but don't protect from Infinity, -Infinity, or NaN
       const scoreAsPercentOfTotal = score === 0 ? 0 : score / sum
       if (players[index].id in playerScores) {
-         playerScores[players[index].id].push(scoreAsPercentAsTotal)
+         playerScores[players[index].id].push(scoreAsPercentOfTotal)
       } else {
-         playerScores[players[index].id] = [scoreAsPercentAsTotal]
+         playerScores[players[index].id] = [scoreAsPercentOfTotal]
       }
    }
 
@@ -417,6 +417,24 @@ export type VersionStr =
    | `${number}.${number}.${number}-${string}`
    | `${number}.${number}.${number}+${string}-${string}`
 
+function comparePrerelease(thi: string[], vv: string[]) {
+   for (const [index, id] of thi.entries()) {
+      if (id === vv[index]) {
+         continue
+      }
+      if (/[0-9]+/.test(id)) {
+         if (/[0-9]+/.test(vv[index])) {
+            return Number(id) < Number(vv[index])
+         }
+         return true
+      } else if (/[0-9]+/.test(vv[index])) {
+         return false
+      }
+      return id < vv[index]
+   }
+   return thi.length < vv.length
+}
+
 /**
  * SemVer implementation
  *
@@ -480,10 +498,31 @@ export class Version {
       this.metadata = metadata ?? null
    }
 
-   // TODO: So that you can use > and < to compare precedence
-   valueOf(): string {
-      let string = String.fromCodePoint(this.major) + String.fromCodePoint(this.minor) + String.fromCodePoint(this.patch)
-      return string
+   // Less than
+   lt(v: Version): string {
+      return (
+         this.major === v.major
+            ? this.minor === v.minor
+               ? this.patch === v.patch
+                  ? this.prelease === null || this.prerelease === v.prerelease
+                     ? false
+                     : v.prelease === null
+                        ? true
+                        : comparePrerelease(this.prerelease.split('.'), v.prerelease.split('.'))
+                  : this.patch < v.patch
+               : this.minor < v.minor
+            : this.major < v.major
+      )
+   }
+
+   // Equal to
+   eq(v: Version) {
+      return this.toString() === v.toString()
+   }
+
+   // Greater than
+   gt(v: Version) {
+      return v.lt(this)
    }
 
    toString(): VersionStr {
@@ -518,7 +557,7 @@ function updatePlayerRatings(
    updateNonInvolvedPlayers = true
 ): void {
    const players = updateNonInvolvedPlayers
-      ? ruleset.players.filter(player => player.id in result)
+      ? [...ruleset.players].filter(player => player.id in result)
       : ruleset.players
 
    // Use Glicko-2 for now
