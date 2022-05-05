@@ -114,7 +114,7 @@ export class Ruleset {
       /// game.result safety:
       ///    _updateGameFinished isn't called with a null game.result,
       ///    but even if it was, an error would be thrown by Object.values
-      if (!Object.values(game.result!).every(result => Number.isFinite())) {
+      if (!Object.values(game.result!).every(result => Number.isFinite(result))) {
          return "Fail: A result was NaN, Infinity, or -Infinity"
       }
 
@@ -514,7 +514,7 @@ export class Version {
                ? this.patch === v.patch
                   ? this.prerelease === null || this.prerelease === v.prerelease
                      ? false
-                     : v.prelease === null
+                     : v.prerelease === null
                         ? true
                         : comparePrerelease(this.prerelease.split('.'), v.prerelease.split('.'))
                   : this.patch < v.patch
