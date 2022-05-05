@@ -16,6 +16,11 @@
    along with bot-rating-system.  If not, see <https://www.gnu.org/licenses/>.
 *******************************************************************************/
 
+// ---------------------------------------------------------------------------
+// If you're here from github support, this file was updated after the issue was reported.
+// Old version: github.com/icecream17/bot-rating-system/commit/21adfcc305d5aa02a496bbaaa7550b28dfb21795
+// ---------------------------------------------------------------------------
+
 /// This rating system uses a modified version of the glicko2 rating system.
 /// It uses various optimizations depending on the deterministicness of the
 /// players and the ruleset.
@@ -106,7 +111,10 @@ export class Ruleset {
    /// Internal
    _updateGameFinished(game: Game) {
       /// First check if the results of the game are valid
-      if (!Object.values(game.result).every(result => Number.isFinite())) {
+      /// game.result safety:
+      ///    _updateGameFinished isn't called with a null game.result,
+      ///    but even if it was, an error would be thrown by Object.values
+      if (!Object.values(game.result!).every(result => Number.isFinite())) {
          return "Fail: A result was NaN, Infinity, or -Infinity"
       }
 
@@ -180,7 +188,7 @@ export class Ruleset {
 
       const current = this.ratingGroups.nonDeterministic.get(ratingGroupTheGameIsIn)
       if (current === undefined) {
-         this.ratingGroups.nonDeterministic.set(lastRgTimestamp, [game])
+         this.ratingGroups.nonDeterministic.set(ratingGroupTheGameIsIn, [game])
       } else {
          current.push(game)
       }
@@ -499,12 +507,12 @@ export class Version {
    }
 
    // Less than
-   lt(v: Version): string {
+   lt(v: Version) {
       return (
          this.major === v.major
             ? this.minor === v.minor
                ? this.patch === v.patch
-                  ? this.prelease === null || this.prerelease === v.prerelease
+                  ? this.prerelease === null || this.prerelease === v.prerelease
                      ? false
                      : v.prelease === null
                         ? true
