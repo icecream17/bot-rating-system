@@ -218,8 +218,8 @@ function calculateResultFromRatingGroup(rg: RatingGroup): Record<ID, Result> {
          for (const id in result) {
             for (const id2 in result) {
                if (id !== id2) {
-                  r[id] ??= {}
-                  r[id][id2] ??= []
+                  r[id] = r[id] ?? {}
+                  r[id][id2] = r[id][id2] ?? []
 
                   // rel  0.2 0.3 0.5
                   // 0.2   =  2/5 2/7
