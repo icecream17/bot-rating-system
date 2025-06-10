@@ -31,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3.5.1
         with:
-          node-version: '14'
+          node-version: '22'
           check-latest: true
 
       - run: npm install --include=dev
