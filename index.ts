@@ -49,6 +49,8 @@ type SubConstrParam<T extends abstract new (...args: any) => any> =
 type Timestamp = ReturnType<typeof Date.now>
 type RatingGroup = Game[]
 
+const NUMBER_OF_MILLISECONDS_IN_A_DAY = 1000 * 60 * 60 * 24
+
 /// Note the difference between Ruleset (chess) and Game (chess)
 /// A game is like an instance of a ruleset
 /// Though in this case you call Ruleset.Game
@@ -59,10 +61,8 @@ export class Ruleset {
    public readonly systemTau = 0.2 // Constrains the change in players' volatilities over time
    public readonly convergenceTolerance = 0.000001
 
-   public readonly ratingInterval = 1000 * 60 * 60 * 24
-   public readonly firstIntervalTimestamp = new Date(
-      new Date().toDateString()
-   ).getTime()
+   public readonly ratingInterval = NUMBER_OF_MILLISECONDS_IN_A_DAY
+
 
    /// Ruleset data
    public games = new Set<Game>()
@@ -75,7 +75,7 @@ export class Ruleset {
       dtRandom: [] as RatingGroup,
 
       /// Contains all non-deterministic games in multiple groups
-      nonDeterministic: new Map<Timestamp, RatingGroup>(),
+      dtChange: new Map<Timestamp, RatingGroup>(),
    }
 
    constructor(
@@ -84,7 +84,11 @@ export class Ruleset {
       /// CHANGE: the game itself changes over time
       public dtness = DtNess.DETERMINISTIC,
       /// Does the order of the players matter?
-      public orderMatters = true
+      public orderMatters = true,
+      /// The time of the first rating period
+      public readonly firstIntervalTimestamp = new Date(
+         new Date().toDateString()
+      ).getTime()
    ) {}
 
    /// Creates a new game of the ruleset
@@ -186,9 +190,9 @@ export class Ruleset {
          (timestamp - this.firstIntervalTimestamp) % this.ratingInterval +
          this.firstIntervalTimestamp
 
-      const current = this.ratingGroups.nonDeterministic.get(ratingGroupTheGameIsIn)
+      const current = this.ratingGroups.dtChange.get(ratingGroupTheGameIsIn)
       if (current === undefined) {
-         this.ratingGroups.nonDeterministic.set(ratingGroupTheGameIsIn, [game])
+         this.ratingGroups.dtChange.set(ratingGroupTheGameIsIn, [game])
       } else {
          current.push(game)
       }
@@ -196,10 +200,16 @@ export class Ruleset {
 
    recalculateRatings() {
       this.players.forEach(player => player.rating.reset())
-      updatePlayerRatings(this, calculateResultFromRatingGroup(
-         this.ratingGroups.deterministic.concat(this.ratingGroups.dtRandom)
-      ), false)
-      const rI = [...this.ratingGroups.nonDeterministic.entries()].sort((a, b) => a[0] - b[0])
+
+      // Bot games are timeless - they are processed in a single rating group
+      updatePlayerRatings(
+         this,
+         calculateResultFromRatingGroup(
+            this.ratingGroups.deterministic.concat(this.ratingGroups.dtRandom)
+         ),
+         [...this.players].filter(player => player.isConstant())
+      )
+      const rI = [...this.ratingGroups.dtChange.entries()].sort((a, b) => a[0] - b[0])
       for (let currI = this.firstIntervalTimestamp; rI.length;) {
          if (currI === rI[0][0]) {
             updatePlayerRatings(this, calculateResultFromRatingGroup(rI.shift()![1]))
@@ -254,11 +264,17 @@ export type Scores =
    | [number, number, ...number[]]
    | readonly [number, number, ...number[]]
 
+/**
+ * 1. Normalizes the scores of players to a percentage of the total score.
+ * 1. Returns a result object mapping player IDs to their score as a percentage of the total score.
+ * @param players Array of players
+ * @param scores Array of scores for each player
+ * @returns Result object mapping player IDs to their score as a percentage of the total score
+ */
 function convertScoresToResult(
    players: GameParticipants,
    scores: Scores
 ): Result {
-
    const playerScores = {} as Record<ID, [number, ...number[]]>
 
    // bug?: scores = [-1, 5] --> [-1/4, 5/4]
@@ -377,6 +393,10 @@ export class Player {
    isDeterministic() {
       return this.dtness === DtNess.DETERMINISTIC
    }
+
+   isConstant() {
+      return this.dtness !== DtNess.CHANGE
+   }
 }
 
 export class Bot extends Player {
@@ -416,6 +436,10 @@ export class Glicko2Rating {
       this.value = Defaults.ratingValue
       this.deviation = Defaults.ratingDeviation
       this.volatility = this.player.ruleset.ratingVolatility
+   }
+
+   toString() {
+      return `Glicko2Rating(${this.value} +- ${this.deviation}, ${this.volatility})`
    }
 }
 
@@ -562,28 +586,28 @@ function iteratorEvery<T>(
 function updatePlayerRatings(
    ruleset: Ruleset,
    result: Record<ID, Result>,
-   updateNonInvolvedPlayers = true
+   relevantPlayers: Iterable<Player> = ruleset.players,
 ): void {
-   const players = updateNonInvolvedPlayers
-      ? [...ruleset.players].filter(player => player.id in result)
-      : ruleset.players
-
    // Use Glicko-2 for now
    // Step 1: Initialize all player rating stats (done)
 
    // Step 2: Convert ratings and RD's onto the Glicko-2 scale
    // + optimization: Calculate g(φ) beforehand
-   const μ = {} as Record<ID, number>
-   const φ = {} as Record<ID, number>
+
+   // Note: This also avoids the issue that player's ratings may depend on the new ratings
+   // instead of the old ratings. They are supposed to be updated simultaneously, so this
+   // stores the old ratings.
+   const μ = {} as Record<ID, number> // ratings
+   const φ = {} as Record<ID, number> // rating deviations
    const gφ = {} as Record<ID, number>
-   for (const player of players) {
+   for (const player of relevantPlayers) {
       μ[player.id] =
          (player.rating.value - Defaults.ratingValue) / Defaults.glicko2ScaleFactor
       φ[player.id] = player.rating.deviation / Defaults.glicko2ScaleFactor
       gφ[player.id] = _g(φ[player.id])
    }
 
-   for (const player of players) {
+   for (const player of relevantPlayers) {
       // Setup variables
       const playerμ = μ[player.id]
       const playerφ = φ[player.id]
@@ -607,45 +631,43 @@ function updatePlayerRatings(
       const [v, Eparts] = _v(μ, gφ, playerμ, opponentIDs)
 
       // Step 4:
-      const sigmaOptimization = opponentIDs.reduce((total: number, id: ID) => total + gφ[id] * (relativeScores[id] - Eparts[id]), 0)
+      const sigmaOptimization = opponentIDs.reduce(
+         (total: number, id: ID) => total + gφ[id] * (relativeScores[id] - Eparts[id]), 0)
       const delta = v * sigmaOptimization // Because of optimization this is only used once
 
-      // First some _f_optimization
-      const playerφSquared = __squared(playerφ)
-      const deltaSquared = __squared(delta)
-      const systemTauSquared = __squared(ruleset.systemTau)
-
       // Step 5.1:
-      const a = 2 * Math.log(playerφ) // Optimization: ln(φ²) = 2ln(φ)
-      const _f_opt = _make_f_opt(deltaSquared, playerφSquared, v, a, systemTauSquared)
+      const a = 2 * Math.log(playerσ) // Optimization: ln(σ²) = 2ln(σ)
+      const _made_f = _make_f(delta, playerφ, v, a, ruleset.systemTau)
 
       // Step 5.2:
       let A: number = a
       let B: number
 
-      // console.debug(playerφ, a, _f_opt(a - ruleset.systemTau))
+      // console.debug(playerφ, a, _made_f(a - ruleset.systemTau))
 
+      // First some _f_optimization
+      const playerφSquared = __squared(playerφ)
+      const deltaSquared = __squared(delta)
       const φφPlusV = playerφSquared + v
       if (deltaSquared > φφPlusV) {
          B = Math.log(deltaSquared - φφPlusV)
       } else {
          let k = 1
-         while (_f_opt(a - (k * ruleset.systemTau)) < 0) {
+         while (_made_f(a - k * ruleset.systemTau) < 0) {
             k++
          }
-
-         B = a - (k * ruleset.systemTau)
+         B = a - k * ruleset.systemTau
       }
 
       // Step 5.3
-      let fA = _f_opt(A)
-      let fB = _f_opt(B)
+      let fA = _made_f(A)
+      let fB = _made_f(B)
 
       // Step 5.4
       while (Math.abs(B - A) > ruleset.convergenceTolerance) {
          // 5.4a
          const C = A + ((A - B) * fA) / (fB - fA)
-         const fC = _f_opt(C)
+         const fC = _made_f(C)
 
          // 5.4b
          if (fC * fB < 0) {
@@ -661,7 +683,7 @@ function updatePlayerRatings(
       }
 
       // Step 5.5
-      const new_playerσ = Math.E ** (A / 2)
+      const new_playerσ = Math.exp(A / 2)
 
       // Step 6
       const pre_playerφ = Math.sqrt(playerφSquared + __squared(new_playerσ))
@@ -725,33 +747,16 @@ function _E_optimization(μ: number, μj: number, gφj: number) {
    return 1 / (1 + Math.exp(-1 * gφj * (μ - μj)))
 }
 
-function _make_f_opt(
-   deltaSquared: number,
-   playerφSquared: number,
+function _make_f(
+   delta: number,
+   playerφ: number,
    v: number,
    a: number,
-   systemTauSquared: number
+   systemTau: number
 ) {
-   return (x: number) => _f_optimization(x, deltaSquared, playerφSquared, v, a, systemTauSquared)
+   return (x: number) => _f(x, delta, playerφ, v, a, systemTau)
 }
 
-function _f_optimization(
-   x: number,
-   deltaSquared: number,
-   playerφSquared: number,
-   v: number,
-   a: number,
-   systemTauSquared: number
-) {
-   const e2TheX = Math.E ** x
-   const tempPart = playerφSquared + v + e2TheX
-   return (
-      (e2TheX * (deltaSquared - tempPart)) / (2 * __squared(tempPart)) -
-      (x - a) / systemTauSquared
-   )
-}
-
-/* Unused */
 function _f(
    x: number,
    delta: number,
@@ -760,10 +765,10 @@ function _f(
    a: number,
    systemTau: number
 ) {
-   const e2TheX = Math.E ** x
+   const e2TheX = Math.exp(x)
    const tempPart = __squared(playerφ) + v + e2TheX
    return (
-      (e2TheX * (__squared(delta) - tempPart)) / (2 * __squared(tempPart)) -
+      e2TheX * (__squared(delta) - tempPart) / (2 * __squared(tempPart)) -
       (x - a) / __squared(systemTau)
    )
 }

@@ -44,8 +44,10 @@ describe('Defaults', () => {
 
 describe('System', () => {
    const system = new Ruleset()
-   const playerA = system.Bot(DtNess.RANDOM)
-   const playerB = system.Bot(DtNess.RANDOM)
+   const randomA = system.Bot(DtNess.RANDOM)
+   const randomB = system.Bot(DtNess.RANDOM)
+   const humanA = system.Bot(DtNess.CHANGE)
+   const humanB = system.Bot(DtNess.CHANGE)
 
    const glicko = new Glicko2({
       tau: system.systemTau,
@@ -58,68 +60,38 @@ describe('System', () => {
    const glickoB = glicko.makePlayer()
 
    test('New players have a rating', () => {
-      expect(playerA.rating).toBeInstanceOf(Rating)
-      expect(playerB.rating).toBeInstanceOf(Rating)
+      expect(randomA.rating).toBeInstanceOf(Rating)
+      expect(randomB.rating).toBeInstanceOf(Rating)
    })
 
    test('Different players have different ids', () => {
-      expect(playerA.id).not.toBe(playerB.id)
+      expect(randomA.id).not.toBe(randomB.id)
    })
 
    test("Volatility is the same", () => {
-      expect(playerA.rating.volatility).toBe(system.ratingVolatility)
-      expect(playerA.rating.volatility).toBeCloseTo(glickoA.getVol())
+      expect(randomA.rating.volatility).toBe(system.ratingVolatility)
+      expect(randomA.rating.volatility).toBeCloseTo(glickoA.getVol())
    })
 
    /// Also checking if the glicko2 implementation is valid
    test('If A vs B and A wins, A.rating > B.rating', () => {
-      const game1 = system.Game([playerA, playerB], true)
-      game1.finish([1, 0])
+      system.Game([randomA, randomB], true).finish([1, 0])
 
-      expect(playerA.rating.value).toBeGreaterThan(playerB.rating.value)
-   })
-
-   test('Same as verified-glicko2 (1)', () => {
-
-      glicko.updateRatings([[glickoA, glickoB, 1]])
-
-      expect(playerA.rating.volatility).toBeCloseTo(glickoA.getVol())
-      expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
-      expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
+      expect(randomA.rating.value).toBeGreaterThan(randomB.rating.value)
    })
 
    test('After A wins once, if B wins twice, B.rating > A.rating', () => {
       console.debug = () => {};
 
-      const game2 = system.Game([playerA, playerB], true)
-      game2.finish([0, 1])
+      system.Game([randomA, randomB], true).finish([0, 1])
+      system.Game([randomA, randomB], true).finish([0, 1])
 
-      const game3 = system.Game([playerA, playerB], true)
-      game3.finish([0, 1])
-
-      expect(playerB.rating.value).toBeGreaterThan(playerA.rating.value)
+      expect(randomB.rating.value).toBeGreaterThan(randomA.rating.value)
    })
-
-   // One rating period is different from two
-   test.skip('Same as verified-glicko2 (2)', () => {
-      glicko.updateRatings([[glickoA, glickoB, 0], [glickoA, glickoB, 0]])
-
-      expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
-      expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
-   })
-
    test('After ABBA, A.rating === B.rating', () => {
-      const game4 = system.Game([playerA, playerB], true)
-      game4.finish([1, 0])
+      system.Game([randomA, randomB], true).finish([1, 0])
 
-      expect(playerA.rating.value).toBeCloseTo(playerB.rating.value)
-   })
-
-   test.skip('Same as verified-glicko2 (3)', () => {
-      glicko.updateRatings([[glickoA, glickoB, 1]])
-
-      expect(playerA.rating.value).toBeCloseTo(glickoA.getRating())
-      expect(playerB.rating.value).toBeCloseTo(glickoB.getRating())
+      expect(randomA.rating.value).toBeCloseTo(randomB.rating.value)
    })
 
    test("If two deterministic games have different results there's an error", () => {
@@ -132,13 +104,38 @@ describe('System', () => {
       }).toThrow()
    })
 
+   test('Same as verified-glicko2 (1)', () => {
+      system.Game([humanA, humanB], true).finish([1, 0])
+      glicko.updateRatings([[glickoA, glickoB, 1]])
+
+      expect(humanA.rating.volatility).toBeCloseTo(glickoA.getVol())
+      expect(humanA.rating.value).toBeCloseTo(glickoA.getRating())
+      expect(humanB.rating.value).toBeCloseTo(glickoB.getRating())
+   })
+
+   // One rating period is different from two
+   test.skip('Same as verified-glicko2 (2)', () => {
+      glicko.updateRatings([[glickoA, glickoB, 0], [glickoA, glickoB, 0]])
+
+      expect(humanA.rating.value).toBeCloseTo(glickoA.getRating())
+      expect(humanB.rating.value).toBeCloseTo(glickoB.getRating())
+   })
+
+   test.skip('Same as verified-glicko2 (3)', () => {
+      glicko.updateRatings([[glickoA, glickoB, 1]])
+
+      expect(humanA.rating.value).toBeCloseTo(glickoA.getRating())
+      expect(humanB.rating.value).toBeCloseTo(glickoB.getRating())
+   })
+
    test('random < plusPtOne < plusPtTwo', () => {
-      const random = system.Bot(DtNess.RANDOM, new Version(1, 0, 1))
-      const plusPtOne = system.Bot(DtNess.RANDOM, new Version(1, 0, 1))
-      const plusPtTwo = system.Bot(DtNess.RANDOM, new Version(1, 0, 1))
+      const random = system.Bot(DtNess.RANDOM)
+      const plusPtOne = system.Bot(DtNess.RANDOM)
+      const plusPtTwo = system.Bot(DtNess.RANDOM)
 
       const totalscores = [0, 0, 0]
-      for (let i = 0; i < 42; i++) {
+      const totalwins = [0, 0, 0]
+      for (let i = 0; i < 100; i++) {
          const game5thru104 = system.Game([random, plusPtOne, plusPtTwo], true)
 
          // Notice how the scores are not adjusted
@@ -146,14 +143,18 @@ describe('System', () => {
          totalscores[0] += scores[0]
          totalscores[1] += scores[1]
          totalscores[2] += scores[2]
+         totalwins[scores.indexOf(Math.max(...scores))]++
          game5thru104.finish(scores)
       }
 
+      // TODO: The 100 games are processed in a single rating period,
+      //       but the rating deviation should still update as if it were multiple samples.
       console.info({
-         random: random.rating.value,
-         plusPtOne: plusPtOne.rating.value,
-         plusPtTwo: plusPtTwo.rating.value,
+         random: `${random.rating}`,
+         plusPtOne: `${plusPtOne.rating}`,
+         plusPtTwo: `${plusPtTwo.rating}`,
          totalscores,
+         totalwins,
       })
 
       const r = expect(random.rating.value)
